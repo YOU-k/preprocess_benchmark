@@ -1,0 +1,53 @@
+CONTACT:
+  email: ''
+  person: ''
+LOCAL:
+    temp-directory: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/dropseqpipe/sc_3cl/tmp
+    memory: 200g
+    raw_data: RAW_DATA
+    results: results
+META:
+    species:
+        homo_sapiens:
+            build: 38 
+            release: 98
+    ratio: 
+    reference-directory: reference
+    gtf_biotypes: gtf_biotypes.yaml
+
+FILTER:
+    barcode-whitelist: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/10xv2_whitelist.txt
+    5-prime-smart-adapter: ''
+    cell-barcode: 
+        start: 1
+        end: 16
+    UMI-barcode:
+        start: 17
+        end: 26
+    cutadapt:
+        adapters-file: custom_adapters.fa
+        R1:
+            quality-filter: 30
+            maximum-Ns: 1
+            extra-params: ''
+        R2:
+            quality-filter: 30
+            minimum-adapters-overlap: 10
+            minimum-length: 15
+            extra-params: ''
+MAPPING:
+    STAR:
+        genomeChrBinNbits: 18
+        outFilterMismatchNmax: 10
+        outFilterMismatchNoverLmax: 0.3
+        outFilterMismatchNoverReadLmax: 1
+        outFilterMatchNmin: 0
+        outFilterMatchNminOverLread: 0.66
+        outFilterScoreMinOverLread: 0.66
+EXTRACTION:
+    LOCUS:
+        - CODING
+        - UTR
+    strand-strategy: SENSE
+    UMI-edit-distance: 1
+    minimum-counts-per-UMI: 0
