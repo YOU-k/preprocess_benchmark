@@ -1,0 +1,158 @@
+#seurat with resolution at 1.6,1.8,2.0,4.0,4.5,5.0
+#louvain SLM
+
+write.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/cluster"
+read.path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/raw"
+
+library(Seurat)
+library(tidyverse)
+library(CellBench)
+
+design=c("cellmix1","cellmix2","cellmix4","rnamix")
+dataname=c("scpipe","zumis","celseq","scruff")
+paste(apply(expand.grid(design, dataname), 1, paste, collapse="_"), ".rds",sep="") ->files
+
+
+result0 <- lapply(files, function(file){readRDS(file.path(read.path,file))})
+
+rep(dataname,each=length(design))->data
+
+tibble(design=rep(design,length(dataname)), 
+       data=data,
+       result=result0) -> datasets
+
+#recode data and design
+datasets$data <- recode(datasets$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs")
+
+##seurat_pipe 1- Louvain
+seurat_pipe_louvain <- function(sce){
+  real_num <- length(unique(na.omit(sce$group)))
+  CreateSeuratObject(counts = counts(sce))->seu
+  seu@meta.data <-cbind(seu@meta.data,list(colData(sce)))
+  seu<- NormalizeData(object = seu, normalization.method = "LogNormalize", scale.factor = 10000)
+  seu <- FindVariableFeatures(object = seu, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5, nfeatures = 1500)
+  seu <- ScaleData(object = seu)
+  seu <- RunPCA(object = seu,  npcs = 20, verbose = FALSE)
+  seu <- FindNeighbors(seu, reduction = "pca", dims = 1:20)
+  seu <- FindClusters(seu, resolution = c(1.6,1.8,2.0,4.0,4.5,5.0), algorithm = 1)
+  list(seu$RNA_snn_res.1.6,seu$RNA_snn_res.1.8,seu$RNA_snn_res.2,seu$RNA_snn_res.4,seu$RNA_snn_res.4.5,seu$RNA_snn_res.5)-> clust
+  unlist(lapply(clust, function(x) {length(levels(x))}))-real_num -> diff
+  which.min(abs(diff)) -> whichk
+  as.SingleCellExperiment(seu)->sce
+  sce$cluster <- factor(clust[[whichk]])
+  return(sce)
+}
+
+
+##seurat_pipe 3- SLM
+seurat_pipe_slm <-  function(sce){
+  real_num <- length(unique(na.omit(sce$group)))
+  CreateSeuratObject(counts = counts(sce))->seu
+  seu@meta.data <-cbind(seu@meta.data,list(colData(sce)))
+  seu<- NormalizeData(object = seu, normalization.method = "LogNormalize", scale.factor = 10000)
+  seu <- FindVariableFeatures(object = seu, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5, nfeatures = 1500)
+  seu <- ScaleData(object = seu)
+  seu <- RunPCA(object = seu,  npcs = 20, verbose = FALSE)
+  seu <- FindNeighbors(seu, reduction = "pca", dims = 1:20)
+  seu <- FindClusters(seu, resolution = c(1.6,1.8,2.0,4.0,4.5,5.0), algorithm = 3)
+  list(seu$RNA_snn_res.1.6,seu$RNA_snn_res.1.8,seu$RNA_snn_res.2,seu$RNA_snn_res.4,seu$RNA_snn_res.4.5,seu$RNA_snn_res.5)-> clust
+  unlist(lapply(clust, function(x) {length(levels(x))}))-real_num -> diff
+  which.min(abs(diff)) -> whichk
+  as.SingleCellExperiment(seu)->sce
+  sce$cluster <- factor(clust[[whichk]])
+  return(sce)
+}
+
+
+cluster_method <- list(
+  seurat_pipe_louvain=seurat_pipe_louvain,
+  seurat_pipe_slm=seurat_pipe_slm
+)
+
+result2 <- datasets %>% mutate(norm_method="seurat") %>% select(design,data,norm_method,result) %>% 
+  arrange(design,data) %>% apply_methods(cluster_method)
+
+saveRDS(result2,file.path(write.path,"plate_mixture_seurat.rds"))
+###evaluation
+library(mclust)
+ARI_matric = function(sce){
+  if(!("cluster" %in% colnames(colData(sce)))){
+    return(NA)
+  }
+  if ("group" %in% colnames(colData(sce))){
+    sce<- sce[,!is.na(sce$group)]
+    ari_val = adjustedRandIndex(sce$group, sce$cluster)
+  }else{
+    sce<- sce[,!is.na(sce$SNG.1ST)]
+    ari_val = adjustedRandIndex(sce$SNG.1ST, sce$cluster)
+  }
+  
+  return(ari_val)
+}
+
+cluster_number = function(sce){
+  if(!("cluster" %in% colnames(colData(sce)))){
+    return(NA)
+  }
+  return(length(table(sce$cluster)))
+}
+
+cluster_filtered_number = function(sce){
+  if(!("cluster" %in% colnames(colData(sce)))){
+    return(NA)
+  }
+  if ("group" %in% colnames(colData(sce))){
+    sce<- sce[,!is.na(sce$group)]
+  }else{
+    sce<- sce[,!is.na(sce$SNG.1ST)]
+  }
+  return(length(table(sce$cluster)))
+}
+
+cal_entropy=function(x){
+  freqs <- table(x)/length(x)
+  freqs = freqs[freqs>0]
+  return(-sum(freqs * log(freqs)))
+}
+
+
+get_cluster_purity=function(sce){
+  if(!("cluster" %in% colnames(colData(sce)))){
+    return(NA)
+  }
+  if ("group" %in% colnames(colData(sce))){
+    sce<- sce[,!is.na(sce$group)]
+    return(mean(unlist(lapply(unique(sce$group),function(x){cal_entropy(sce$cluster[sce$group==x])}))))
+  }else{
+    sce<- sce[,!is.na(sce$SNG.1ST)]
+    return(mean(unlist(lapply(unique(sce$SNG.1ST),function(x){cal_entropy(sce$cluster[sce$SNG.1ST==x])}))))
+  }
+  
+}
+
+get_cluster_accuracy=function(sce){
+  if(!("cluster" %in% colnames(colData(sce)))){
+    return(NA)
+  }
+  if ("group" %in% colnames(colData(sce))){
+    sce<- sce[,!is.na(sce$group)]
+    return(mean(unlist(lapply(unique(sce$cluster),function(x){cal_entropy(sce$group[sce$cluster==x])}))))
+  }else{
+    sce<- sce[,!is.na(sce$SNG.1ST)]
+    return(mean(unlist(lapply(unique(sce$cluster),function(x){cal_entropy(sce$SNG.1ST[sce$cluster==x])}))))
+  }
+  
+}
+
+clustering_evaluation <- list(
+  ARI=ARI_matric,
+  cluster_purity=get_cluster_purity,
+  cluster_accuracy=get_cluster_accuracy,
+  cluster_number=cluster_number,
+  cluster_filtered_number=cluster_filtered_number
+)
+
+result3 <- result2 %>% apply_methods(clustering_evaluation)
+saveRDS(result3,file.path(write.path,"plate_mixture_seu_evals.rds"))
+
+

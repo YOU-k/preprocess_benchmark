@@ -1,0 +1,4 @@
+SAMPLE_NAME	CELL_BARCODES_INDEX	R1	R2
+sc4	1-383	/stornext/General/data/user_managed/grpu_mritchie_1/SCmixology/NN110/daniela_NN110_060818/4_S2_R1.fastq.gz	/stornext/General/data/user_managed/grpu_mritchie_1/SCmixology/NN110/daniela_NN110_060818/4_S2_R2.fastq.gz
+
+

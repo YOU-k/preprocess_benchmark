@@ -1,0 +1,803 @@
+```{r}
+eval.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/cluster"
+savepath <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/results/cluster"
+library(tidyverse)
+library(CellBench)
+```
+
+```{r}
+plate_mixture <- readRDS(file.path(eval.path,"plate_mixture_evals.rds"))
+plate_mixture$hivar_method <- NULL
+plate_mixture_sctransform <- readRDS(file.path(eval.path,"plate_mixture_evals_sctransform.rds"))
+plate_mixture %>% dplyr::filter(!is.task_error(result)) -> plate_mixture
+as.numeric(plate_mixture$result) ->plate_mixture$result
+bind_rows(plate_mixture %>% dplyr::filter(!norm_method=="sctransform"),plate_mixture_sctransform) -> plate_mixture
+
+
+#as.character(plate_mixture$norm_method) -> plate_mixture$norm_method
+plate_mixture_seu <- readRDS(file.path(eval.path,"plate_mixture_seu_evals.rds"))
+bind_rows(plate_mixture_seu,plate_mixture) ->plate_mixture
+
+
+```
+
+```{r}
+plate_mixture$data <- recode(plate_mixture$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools")
+plate_mixture %>% spread(clustering_evaluation,result) -> plate_mixture_spread
+
+```
+
+```{r}
+ggplot(data=plate_mixture_spread,aes(x=data,y=ARI,col=data))+
+  geom_point()+ geom_boxplot()+
+  facet_grid(.~cluster_method)+
+  scale_colour_manual(values = mycol)+
+  #scale_shape_manual(values=1:nlevels(res_ent_df_top$cluster_method))+
+  labs(x="",y="ARI",col="preprocess_method",shape="")+
+  theme_bw()+
+  theme(text = element_text(size=15),legend.position="right",axis.title.x=element_blank(),axis.text.x = element_text(angle = 15, hjust = 0.5))
+```
+
+
+```{r}
+library(reshape2)
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(plate_mixture_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,my.max)-> plate_mixture_heatmap
+plate_mixture_heatmap[plate_mixture_heatmap=="-Inf"] <-NA 
+rownames(plate_mixture_heatmap) <- plate_mixture_heatmap[,1]
+plate_mixture_heatmap[,-1] -> plate_mixture_heatmap
+```
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"plate_mixture_ari_heatmap.pdf"),height = 4,width=7)
+pheatmap(plate_mixture_heatmap[,order(apply(plate_mixture_heatmap,2,median),decreasing = TRUE)][order(apply(plate_mixture_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(plate_mixture_heatmap),
+           row.names = colnames(plate_mixture_heatmap)), 
+         annotation_colors  = list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(plate_mixture_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+
+
+```{r}
+plate_singlecell <- readRDS(file.path(eval.path,"plate_singlecell_evals.rds"))
+plate_singlecell$hivar_method <- NULL
+plate_singlecell_sctransform <- readRDS(file.path(eval.path,"plate_singlecell_evals_sctransform.rds"))
+plate_singlecell %>% dplyr::filter(!is.task_error(result)) -> plate_singlecell
+as.numeric(plate_singlecell$result) ->plate_singlecell$result
+bind_rows(plate_singlecell %>% dplyr::filter(!norm_method=="sctransform"),plate_singlecell_sctransform) -> plate_singlecell
+
+plate_singlecell_seu <- readRDS(file.path(eval.path,"plate_singlecell_seu_evals.rds"))
+
+bind_rows(plate_singlecell_seu,plate_singlecell) ->plate_singlecell
+plate_singlecell$data <- recode(plate_singlecell$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools")
+
+plate_singlecell %>% spread(clustering_evaluation,result) -> plate_singlecell_spread
+```
+
+```{r}
+plate_singlecell_spread$norm_cluster = paste(plate_singlecell_spread$norm_method,plate_singlecell_spread$cluster_method,sep="_")
+plate_singlecell_spread %>% filter(!norm_cluster=="sctransform-RaceID") -> plate_singlecell_spread
+```
+
+
+```{r}
+ggplot(data=plate_singlecell_spread,aes(x=data,y=ARI,col=data))+
+  geom_point()+ geom_violin()+
+  scale_colour_manual(values = mycol)+
+  #scale_shape_manual(values=1:nlevels(res_ent_df_top$cluster_method))+
+  labs(x="",y="ARI",col="preprocess_method",shape="")+
+  theme_bw()+
+  facet_grid(.~cluster_method)+
+  theme(text = element_text(size=15),legend.position="right",axis.title.x=element_blank(),axis.text.x = element_text(angle = 15, hjust = 0.5))
+```
+
+```{r}
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(plate_singlecell_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,my.max)-> plate_singlecell_heatmap
+plate_singlecell_heatmap[plate_singlecell_heatmap=="-Inf"] <-NA 
+rownames(plate_singlecell_heatmap) <- plate_singlecell_heatmap[,1]
+plate_singlecell_heatmap[,-1] -> plate_singlecell_heatmap
+```
+
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"plate_singlecell_ari_heatmap.pdf"),height = 4,width=7)
+pheatmap(plate_singlecell_heatmap[,order(apply(plate_singlecell_heatmap,2,median),decreasing = TRUE)][order(apply(plate_singlecell_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(plate_singlecell_heatmap),
+           row.names = colnames(plate_singlecell_heatmap)), 
+         annotation_colors  = list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(plate_singlecell_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+```{r}
+dcast(plate_singlecell_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> plate_singlecell_heatmap
+rownames(plate_singlecell_heatmap) <- plate_singlecell_heatmap[,1]
+plate_singlecell_heatmap[,-1] -> plate_singlecell_heatmap
+```
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"plate_singlecell_ari_heatmap.pdf"),height = 4,width=7)
+pheatmap(plate_singlecell_heatmap[,order(apply(plate_singlecell_heatmap,2,median),decreasing = TRUE)][order(apply(plate_singlecell_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(plate_singlecell_heatmap),
+           row.names = colnames(plate_singlecell_heatmap)), 
+         annotation_colors  = list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(plate_singlecell_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+
+```{r}
+droplet_singlecell <- readRDS(file.path(eval.path,"droplet_singlecell_evals.rds"))
+droplet_singlecell$hivar_method <- NULL
+droplet_singlecell_sctransform <- readRDS(file.path(eval.path,"droplet_singlecell_evals_sctransform.rds"))
+droplet_singlecell %>% dplyr::filter(!is.task_error(result)) -> droplet_singlecell
+as.numeric(droplet_singlecell$result) ->droplet_singlecell$result
+bind_rows(droplet_singlecell %>% dplyr::filter(!norm_method=="sctransform"),droplet_singlecell_sctransform) -> droplet_singlecell
+
+droplet_singlecell_seu <- readRDS(file.path(eval.path,"droplet_singlecell_seu_evals.rds"))
+
+bind_rows(droplet_singlecell_seu,droplet_singlecell) ->droplet_singlecell
+droplet_singlecell$data <- recode(droplet_singlecell$data,"scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools",
+                                "optimus" ="Optimus","drop"="dropSeqPipe","cellranger"="Cell Ranger",
+                                "alevin"="salmon alevin")
+
+droplet_singlecell %>% spread(clustering_evaluation,result) -> droplet_singlecell_spread
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_singlecell_ari_heatmap_all.pdf"),height = 5,width=11)
+droplet_singlecell_spread %>% 
+ggplot()+
+  geom_tile(aes(norm_method, cluster_method, fill= ARI))+
+  facet_grid(design~data)+scale_fill_distiller(palette = "Spectral",na.value = "grey") +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=15),axis.text.x = element_blank())
+dev.off()
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_singlecell_ari_heatmap_seu.pdf"),height = 5,width=8)
+droplet_singlecell_seu %>% 
+  spread(clustering_evaluation,result) %>% 
+ggplot()+
+  geom_tile(aes(norm_method, cluster_method, fill= ARI))+
+  facet_grid(design~data)+scale_fill_distiller(palette = "Spectral",na.value = "grey") +
+  geom_text(aes(norm_method, cluster_method, label= round(ARI,digits = 2))) +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=10),axis.text.x = element_blank())
+dev.off()
+```
+
+
+```{r}
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(droplet_singlecell_spread %>% dplyr::select(data,cluster_method,ARI),data ~cluster_method,my.max)-> droplet_singlecell_heatmap
+droplet_singlecell_heatmap[droplet_singlecell_heatmap=="-Inf"] <-NA 
+
+rownames(droplet_singlecell_heatmap) <- droplet_singlecell_heatmap[,1]
+droplet_singlecell_heatmap[,-1] -> droplet_singlecell_heatmap
+```
+
+```{r}
+pheatmap(droplet_singlecell_heatmap)
+```
+
+
+```{r}
+droplet_tissue <- readRDS(file.path(eval.path,"droplet_tissue_evals.rds"))
+droplet_tissue %>% dplyr::filter(!is.task_error(result)) -> droplet_tissue
+as.numeric(droplet_tissue$result) ->droplet_tissue$result
+droplet_tissue_sctransform <- readRDS(file.path(eval.path,"droplet_tissue_evals_sctransform.rds"))
+bind_rows(droplet_tissue,droplet_tissue_sctransform) ->droplet_tissue
+
+
+
+droplet_tissue_seu <- readRDS(file.path(eval.path,"droplet_tissue_seu_evals.rds"))
+bind_rows(droplet_tissue_seu, droplet_tissue %>% dplyr::select(-hivar_method)) -> droplet_tissue
+droplet_tissue %>% spread(clustering_evaluation,result) -> droplet_tissue_spread
+```
+
+
+```{r}
+droplet_tissue_spread$data <- recode(droplet_tissue_spread$data,"cellranger"="Cell Ranger","drop"="dropSeqPipe",
+                               "optimus" ="Optimus","alevin"="salmon alevin","zumis"="zUMIs","scpipe"="scPipe","kb"="kallisto bustools")
+
+```
+
+```{r}
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(droplet_tissue_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,my.max)-> droplet_tissue_heatmap
+droplet_tissue_heatmap[droplet_tissue_heatmap=="-Inf"] <-NA 
+rownames(droplet_tissue_heatmap) <- droplet_tissue_heatmap[,1]
+droplet_tissue_heatmap[,-1] -> droplet_tissue_heatmap
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_tissue_ari_heatmap.pdf"),height = 4,width=8)
+pheatmap(droplet_tissue_heatmap[,order(apply(droplet_tissue_heatmap,2,median),decreasing = TRUE)][order(apply(droplet_tissue_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_tissue_heatmap),
+           row.names = colnames(droplet_tissue_heatmap)), 
+         annotation_colors  =list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_tissue_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+```{r}
+library(reshape2)
+library(pheatmap)
+dcast(droplet_tissue_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> droplet_tissue_heatmap
+droplet_tissue_heatmap[droplet_tissue_heatmap=="-Inf"] <-NA 
+rownames(droplet_tissue_heatmap) <- droplet_tissue_heatmap[,1]
+droplet_tissue_heatmap[,-1] -> droplet_tissue_heatmap
+pdf(file.path(savepath,"droplet_tissue_ari_heatmap_median.pdf"),height = 4,width=8)
+pheatmap(droplet_tissue_heatmap[,order(apply(droplet_tissue_heatmap,2,median),decreasing = TRUE)][order(apply(droplet_tissue_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_tissue_heatmap),
+           row.names = colnames(droplet_tissue_heatmap)), 
+         annotation_colors  =list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_tissue_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+```
+
+
+
+```{r}
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(plate_singlecell_spread %>% select(data,cluster_method,ARI),cluster_method ~data,my.max)-> plate_singlecell_heatmap
+plate_singlecell_heatmap[plate_singlecell_heatmap=="-Inf"] <-NA 
+rownames(plate_singlecell_heatmap) <- plate_singlecell_heatmap[,1]
+plate_singlecell_heatmap[,-1] -> plate_singlecell_heatmap
+```
+
+```{r}
+pdf(file.path(savepath,"plate_singlecell_ari_heatmap.pdf"),height = 4,width=8)
+pheatmap(plate_singlecell_heatmap[,order(apply(plate_singlecell_heatmap,2,median),decreasing = TRUE)][order(apply(plate_singlecell_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(plate_singlecell_heatmap),
+           row.names = colnames(plate_singlecell_heatmap)), 
+         annotation_colors  =list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(plate_singlecell_heatmap,2,median))),
+         max.labels = Inf,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+```
+
+
+```{r}
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(plate_singlecell_spread %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> plate_singlecell_heatmap
+plate_singlecell_heatmap[plate_singlecell_heatmap=="-Inf"] <-NA 
+rownames(plate_singlecell_heatmap) <- plate_singlecell_heatmap[,1]
+plate_singlecell_heatmap[,-1] -> plate_singlecell_heatmap
+```
+
+```{r}
+pdf(file.path(savepath,"plate_singlecell_ari_heatmap_average.pdf"),height = 4,width=8)
+pheatmap(plate_singlecell_heatmap[,order(apply(plate_singlecell_heatmap,2,median),decreasing = TRUE)][order(apply(plate_singlecell_heatmap,1,median),decreasing = TRUE),], 
+         annotation_col = data.frame(
+           preprocess = colnames(plate_singlecell_heatmap),
+           row.names = colnames(plate_singlecell_heatmap)), 
+         annotation_colors  =list(preprocess=mycol),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(plate_singlecell_heatmap,2,median))),
+         max.labels = Inf,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+```
+
+```{r}
+entropy_sel_top = function(res,topn=5){
+  top_res = NULL
+  for (i in unique(res$data)){
+    tmp = res[res$data==i,]
+    tmp = tmp[order(tmp$entropy_sum,decreasing = FALSE)[1:min(topn,nrow(tmp))],]
+    if(is.null(top_res)){
+      top_res=tmp
+    }else{
+      top_res = rbind(tmp,top_res)
+    }
+  }
+  return(top_res)
+}
+```
+
+
+
+```{r}
+droplet_singlecell %>% spread(clustering_evaluation,result) -> droplet_singlecell_spread
+droplet_singlecell_spread$entropy_sum = sqrt(droplet_singlecell_spread$cluster_purity^2+droplet_singlecell_spread$cluster_accuracy^2)
+droplet_singlecell_spread_top=entropy_sel_top(droplet_singlecell_spread)
+as.factor(droplet_singlecell_spread_top$cluster_method)->droplet_singlecell_spread_top$cluster_method
+droplet_singlecell_spread_top$norm_cluster = paste(droplet_singlecell_spread_top$norm_method,droplet_singlecell_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+ggplot(data=droplet_singlecell_spread %>% dplyr::filter(!cluster_method %in% c("RaceID", "sc3_SVM")) ,aes(x=cluster_method,y=cluster_accuracy,col=data))+
+  #geom_point(size=2)+ 
+  geom_boxplot()+
+  #scale_shape_manual(values=1:length(unique(droplet_singlecell_spread$cluster_method)))+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  theme(text = element_text(size=15),legend.position="right")
+```
+
+
+```{r}
+#pdf(file.path(savepath,"droplet_singlecell_entropy.pdf"),height = 5,width = 7)
+jitter <- position_jitter(width = 0.001, height = 0.001)
+ggplot(data=droplet_singlecell_spread ,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:length(unique(droplet_singlecell_spread$cluster_method)))+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  theme(text = element_text(size=15),legend.position="right")
+#dev.off()
+```
+
+
+
+```{r}
+plate_singlecell_spread$entropy_sum = sqrt(plate_singlecell_spread$cluster_purity^2+plate_singlecell_spread$cluster_accuracy^2)
+plate_singlecell_spread_top=entropy_sel_top(plate_singlecell_spread)
+as.factor(plate_singlecell_spread$cluster_method)->plate_singlecell_spread$cluster_method
+plate_singlecell_spread_top$norm_cluster = paste(plate_singlecell_spread_top$norm_method,plate_singlecell_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+#pdf(file.path(savepath,"plate_singlecell_entropy.pdf"),height = 5,width = 7)
+jitter <- position_jitter(width = 0.05, height = 0.05)
+ggplot(data=plate_singlecell_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=3)+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+#dev.off()
+```
+
+
+
+```{r}
+plate_mixture_spread$entropy_sum = sqrt(plate_mixture_spread$cluster_purity^2+plate_mixture_spread$cluster_accuracy^2)
+plate_mixture_spread_top=entropy_sel_top(plate_mixture_spread)
+as.factor(plate_mixture_spread$cluster_method)->plate_mixture_spread$cluster_method
+plate_mixture_spread_top$norm_cluster = paste(plate_mixture_spread_top$norm_method,plate_mixture_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+pdf(file.path(savepath,"plate_rnamix_entropy.pdf"),height = 5,width = 7)
+ggplot(data=plate_mixture_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(plate_mixture_spread_top$cluster_method))+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+```{r}
+plate_mixture_spread$entropy_sum = sqrt(plate_mixture_spread$cluster_purity^2+plate_mixture_spread$cluster_accuracy^2)
+plate_mixture_spread %>%  dplyr::filter(!grepl("cellmix",design)) -> plate_mixture_spread_rna
+plate_mixture_spread_top=entropy_sel_top(plate_mixture_spread_rna)
+as.factor(plate_mixture_spread$cluster_method)->plate_mixture_spread$cluster_method
+plate_mixture_spread_top$norm_cluster = paste(plate_mixture_spread_top$norm_method,plate_mixture_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+pdf(file.path(savepath,"plate_mixture_entropy.pdf"),height = 5,width = 7)
+ggplot(data=plate_mixture_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(plate_mixture_spread_top$cluster_method))+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+
+# top5, others top10
+```{r}
+droplet_tissue_spread$entropy_sum = sqrt(droplet_tissue_spread$cluster_purity^2+droplet_tissue_spread$cluster_accuracy^2)
+droplet_tissue_spread_top=entropy_sel_top(droplet_tissue_spread)
+  as.factor(droplet_tissue_spread_top$cluster_method)->droplet_tissue_spread_top$cluster_method
+droplet_tissue_spread_top$norm_cluster = paste(droplet_tissue_spread_top$norm_method,droplet_tissue_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_tissue_entropy.pdf"),height = 5,width = 7)
+ggplot(data=droplet_tissue_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=3)+
+  scale_shape_manual(values=1:nlevels(droplet_tissue_spread_top$cluster_method))+
+  scale_colour_manual(values = mycol)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="clustering method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+```{r}
+droplet_singlecell_spread %>% filter(!(norm_method=="sctransform"&cluster_method=="RaceID")) -> droplet_singlecell_spread
+
+```
+
+
+
+```{r}
+droplet_singlecell_spread$hivar_method<- NULL
+droplet_singlecell_spread$design <-"singlecell"
+droplet_tissue_spread$design <-"tissue"
+
+bind_rows(droplet_singlecell_spread,droplet_tissue_spread) -> droplet_spread
+```
+```{r}
+data_ari<- DE_methods(as.data.frame(droplet_spread),res_column="ARI",met_column="data")
+data_ari$methodtype <- "preprocess"
+norm_ari <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="ARI",met_column="norm_method")
+norm_ari$methodtype <- "normalization method"
+cluster_ari <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="ARI",met_column="cluster_method")
+cluster_ari$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"ari_lm_droplet.pdf"),width = 8,height = 4)
+bind_rows(data_ari,norm_ari,cluster_ari) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+
+
+
+```{r}
+data_ari<- DE_methods_in(as.data.frame(droplet_tissue_spread),res_column="ARI",met_column="data")
+data_ari$methodtype <- "preprocess"
+norm_ari <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="ARI",met_column="norm_method")
+norm_ari$methodtype <- "normalization method"
+cluster_ari <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="ARI",met_column="cluster_method")
+cluster_ari$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"ari_lm_droplet_tissue.pdf"),width = 8,height = 4)
+bind_rows(data_ari,norm_ari,cluster_ari) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+```{r}
+data_ari<- DE_methods_in(as.data.frame(droplet_singlecell_spread),res_column="ARI",met_column="data")
+data_ari$methodtype <- "preprocess"
+norm_ari <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="ARI",met_column="norm_method")
+norm_ari$methodtype <- "normalization method"
+cluster_ari <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="ARI",met_column="cluster_method")
+cluster_ari$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"ari_lm_droplet_singlecell.pdf"),width = 8,height = 4)
+bind_rows(data_ari,norm_ari,cluster_ari) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+```{r}
+DE_methods(as.data.frame(droplet_spread),res_column="cluster_accuracy",met_column="data")
+DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!norm_method=="seurat")),res_column="cluster_accuracy",met_column="norm_method")
+DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!norm_method=="none")),res_column="cluster_accuracy",met_column="cluster_method")
+```
+```{r}
+data_accuracy<- DE_methods(as.data.frame(droplet_spread),res_column="cluster_accuracy",met_column="data")
+data_accuracy$methodtype <- "preprocess"
+norm_accuracy <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_accuracy",met_column="norm_method")
+norm_accuracy$methodtype <- "normalization method"
+cluster_accuracy <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_accuracy",met_column="cluster_method")
+cluster_accuracy$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"accuracy_lm_droplet.pdf"),width = 8,height = 4)
+bind_rows(data_accuracy,norm_accuracy,cluster_accuracy) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+```{r}
+data_accuracy<- DE_methods_in(as.data.frame(droplet_singlecell_spread),res_column="cluster_accuracy",met_column="data")
+data_accuracy$methodtype <- "preprocess"
+norm_accuracy <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_accuracy",met_column="norm_method")
+norm_accuracy$methodtype <- "normalization method"
+cluster_accuracy <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_accuracy",met_column="cluster_method")
+cluster_accuracy$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"accuracy_lm_droplet_singlecell.pdf"),width = 8,height = 4)
+bind_rows(data_accuracy,norm_accuracy,cluster_accuracy) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+```{r}
+data_accuracy<- DE_methods_in(as.data.frame(droplet_tissue_spread),res_column="cluster_accuracy",met_column="data")
+data_accuracy$methodtype <- "preprocess"
+norm_accuracy <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_accuracy",met_column="norm_method")
+norm_accuracy$methodtype <- "normalization method"
+cluster_accuracy <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_accuracy",met_column="cluster_method")
+cluster_accuracy$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"accuracy_lm_droplet_tissue.pdf"),width = 8,height = 4)
+bind_rows(data_accuracy,norm_accuracy,cluster_accuracy) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+
+```{r}
+DE_methods(as.data.frame(droplet_spread),res_column="cluster_purity",met_column="data")
+DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_purity",met_column="norm_method")
+DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!norm_method=="none")),res_column="cluster_purity",met_column="cluster_method")
+```
+
+
+```{r}
+data_purity<- DE_methods(as.data.frame(droplet_spread),res_column="cluster_purity",met_column="data")
+data_purity$methodtype <- "preprocess"
+norm_purity <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_purity",met_column="norm_method")
+norm_purity$methodtype <- "normalization method"
+cluster_purity <- DE_methods(as.data.frame(droplet_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_purity",met_column="cluster_method")
+cluster_purity$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"purity_lm_droplet.pdf"),width = 8,height = 4)
+bind_rows(data_purity,norm_purity,cluster_purity) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+```{r}
+data_purity<- DE_methods_in(as.data.frame(droplet_tissue_spread),res_column="cluster_purity",met_column="data")
+data_purity$methodtype <- "preprocess"
+norm_purity <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_purity",met_column="norm_method")
+norm_purity$methodtype <- "normalization method"
+cluster_purity <- DE_methods_in(as.data.frame(droplet_tissue_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_purity",met_column="cluster_method")
+cluster_purity$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"purity_lm_droplet_tissue.pdf"),width = 8,height = 4)
+bind_rows(data_purity,norm_purity,cluster_purity) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+```{r}
+data_purity<- DE_methods_in(as.data.frame(droplet_singlecell_spread),res_column="cluster_purity",met_column="data")
+data_purity$methodtype <- "preprocess"
+norm_purity <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column="cluster_purity",met_column="norm_method")
+norm_purity$methodtype <- "normalization method"
+cluster_purity <- DE_methods_in(as.data.frame(droplet_singlecell_spread %>% dplyr::filter(!(norm_method=="none"))),res_column="cluster_purity",met_column="cluster_method")
+cluster_purity$methodtype <- "clustering method"
+```
+
+```{r}
+pdf(file.path(savepath,"purity_lm_droplet_singlecell.pdf"),width = 8,height = 4)
+bind_rows(data_purity,norm_purity,cluster_purity) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+dev.off()
+```
+
+```{r}
+(-scale(data_purity$coefficient,center = 0) -scale(data_accuracy$coefficient,center = 0)+scale(data_ari$coefficient,center = 0))/sqrt(3) -> zscore
+
+```
+
+
+```{r}
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="ARI",met_column="data")
+DE_methods_in(as.data.frame(plate_singlecell_spread %>% filter(!norm_method=="seurat")),res_column="ARI",met_column="norm_method")
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="ARI",met_column="cluster_method")
+```
+
+```{r}
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="cluster_accuracy",met_column="data")
+DE_methods_in(as.data.frame(plate_singlecell_spread %>% filter(!norm_method=="seurat")),res_column="cluster_accuracy",met_column="norm_method")
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="cluster_accuracy",met_column="cluster_method")
+```
+
+```{r}
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="cluster_purity",met_column="data")
+DE_methods_in(as.data.frame(plate_singlecell_spread %>% filter(!norm_method=="seurat")),res_column="cluster_purity",met_column="norm_method")
+DE_methods_in(as.data.frame(plate_singlecell_spread),res_column="cluster_purity",met_column="cluster_method")
+```
+
+
+```{r}
+plate_singlecell_spread$norm_cluster = paste(plate_singlecell_spread$norm_method,plate_singlecell_spread$cluster_method,sep="-")
+plate_singlecell_spread %>% filter(!norm_cluster=="sctransform-RaceID") -> plate_singlecell_spread
+for (use in c("ARI","cluster_purity","cluster_accuracy")){
+  data_ari<- DE_methods_in(as.data.frame(plate_singlecell_spread),res_column=use,met_column="data")
+  data_ari$methodtype <- "preprocess"
+  norm_ari <- DE_methods_in(as.data.frame(plate_singlecell_spread %>%         dplyr::filter(!(norm_method=="seurat"|norm_method=="none"))),res_column=use,met_column="norm_method")
+  norm_ari$methodtype <- "normalization method"
+  cluster_ari <- DE_methods_in(as.data.frame(plate_singlecell_spread %>%   dplyr::filter(!(norm_method=="none"))),res_column=use,met_column="cluster_method")
+  cluster_ari$methodtype <- "clustering method"
+  pdf(paste0(savepath,"/",use,"_lm_plate.pdf"),width = 8,height = 4)
+  plot <- bind_rows(data_ari,norm_ari,cluster_ari) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  theme_bw() +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="processing steps")
+  print(plot)
+  dev.off()
+}
+```

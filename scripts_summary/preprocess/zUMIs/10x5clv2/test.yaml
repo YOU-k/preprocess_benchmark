@@ -1,0 +1,51 @@
+project: sc_5cl
+sequence_files:
+  file1:
+    name: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/dsp/sc_5cl_v2/RAW_DATA/Lib90_combined_S1_L001_R1.fastq.gz
+    base_definition: 
+     - BC(1-16)
+     - UMI(17-26)
+  file2:
+    name: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/dsp/sc_5cl_v2/RAW_DATA/Lib90_combined_S1_L001_R2.fastq.gz
+    base_definition: 
+     - cDNA(1-98)
+reference:
+  STAR_index: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis/homo_star_idx
+  GTF_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/homo_ercc.gtf
+  additional_STAR_params: ''
+  additional_files: ~
+out_dir: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis2/sc_5cl
+num_threads: 8
+mem_limit: null
+filter_cutoffs:
+  BC_filter:
+    num_bases: 1
+    phred: 20
+  UMI_filter:
+    num_bases: 1
+    phred: 20
+barcodes:
+  barcode_num: ~
+  barcode_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/10xv2_whitelist.txt
+  automatic: no
+  BarcodeBinning: 1
+  nReadsperCell: 0
+  demultiplex: no
+counting_opts:
+  introns: yes
+  downsampling: '0'
+  strand: 0
+  Ham_Dist: 0
+  write_ham: no
+  velocyto: no
+  primaryHit: yes
+  twoPass: yes
+make_stats: yes
+which_Stage: Filtering
+Rscript_exec: Rscript
+STAR_exec: STAR
+pigz_exec: pigz
+samtools_exec: samtools
+zUMIs_directory: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/tools/zUMIs
+read_layout: SE
+

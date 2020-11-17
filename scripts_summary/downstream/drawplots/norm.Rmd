@@ -1,0 +1,379 @@
+```{r}
+eval.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/norm/eval"
+savepath <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/results/norm"
+```
+
+```{r}
+plate_mixture <- readRDS(file.path(eval.path,"plate_mixture_eval.rds"))
+plate_mixture %>% spread(norm_evaluation,result) -> plate_mixture_spread
+```
+
+```{r}
+plate_singlecell <- readRDS(file.path(eval.path,"plate_singlecell_eval.rds"))
+plate_singlecell %>% spread(norm_evaluation,result) -> plate_singlecell_spread
+```
+
+```{r}
+```
+
+
+
+```{r}
+rbind(plate_mixture_spread,plate_singlecell_spread) -> plate_spread
+```
+#recode
+```{r}
+plate_spread$design <- recode(plate_spread$design,"plate3cl"="simplemix","plate5cl1"="simplemix",
+                            "plate5cl2"="simplemix","plate5cl3"="simplemix",
+                            "cellmix1"="cellmix","cellmix2"="cellmix",
+                            "cellmix4"="cellmix")
+plate_spread$data <- recode(plate_spread$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs")
+```
+
+```{r}
+plate_spread %>% dplyr::filter(!is.task_error(silhouette)) -> plate_spread
+as.numeric(plate_spread$silhouette) -> plate_spread$silhouette
+ggplot()+geom_boxplot(data=plate_spread,aes(x=data,y=silhouette,col=data),outlier.color = "red")+theme_bw()+
+  theme(axis.title.x=element_blank(),axis.text.x=element_blank(),axis.ticks.x=element_blank())+
+  facet_grid( .~ norm_method) +
+  scale_colour_manual(values = mycol) +
+  labs(y="silhouette widths",col="preprocess pipelines",shape="design")
+```
+```{r}
+plate_spread %>% group_by(design,data,norm_method) %>% summarise(mean=mean(silhouette),sd=sd(silhouette)) -> plate_draw
+with(plate_draw,reorder(data,mean)) -> plate_draw$data
+with(plate_draw,reorder(norm_method,mean)) -> plate_draw$norm_method
+```
+
+
+```{r}
+library(ggridges)
+ggplot(data=plate_spread,aes(x=silhouette,y=data,fill=data))+geom_density_ridges(scale=1.5)+theme_bw()+
+  facet_grid(norm_method~.) +
+  scale_fill_manual(values = mycol) +
+  labs(x="",y="silhouette widths",col="preprocess workflows",shape="design")+ theme(text=element_text(size=15))
+```
+
+
+```{r}
+pdf(file.path(savepath,"plate_sil.pdf"),height=4.5,width=5.5)
+ggplot(data=plate_draw,aes(x=data,y=mean,col=data))+geom_violin()+geom_point(data=plate_draw,aes(x=data,y=mean,col=data),size=2)+theme_bw()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0,
+                position=position_dodge(0.05))+
+  facet_grid(norm_method~design) +
+  coord_flip()+
+  scale_colour_manual(values = mycol) +
+  labs(x="",y="silhouette widths",col="preprocess workflows",shape="design")+ theme(text=element_text(size=12))
+dev.off()
+```
+
+```{r}
+droplet_singlecell <- readRDS(file.path(eval.path,"droplet_singlecell_eval.rds"))
+droplet_singlecell %>% spread(norm_evaluation,result) -> droplet_singlecell_spread
+```
+
+```{r}
+droplet_tissue <- readRDS(file.path(eval.path,"droplet_tissue_eval.rds"))
+droplet_tissue %>% spread(norm_evaluation,result) -> droplet_tissue_spread
+rbind(droplet_singlecell_spread,droplet_tissue_spread) -> droplet_spread
+```
+
+
+#recode
+```{r}
+droplet_spread$type <- droplet_spread$design 
+droplet_singlecell$design <-
+  recode(droplet_singlecell$design,"sc3cl"="10Xv2_3cl","sc5clv2"="10Xv2_5cl","sc5clv3"="10Xv3_5cl",
+         "mus1"="10Xv2_tissue1","mus2"="10Xv2_tissue2")
+droplet_spread$data <- recode(droplet_spread$data, "scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools",
+                                "optimus" ="Optimus","drop"="dropSeqPipe","cellranger"="Cell Ranger",
+                                "alevin"="salmon alevin")
+```
+
+
+
+
+```{r}
+droplet_spread %>% dplyr::filter(!is.task_error(silhouette)) -> droplet_spread
+as.numeric(droplet_spread$silhouette) -> droplet_spread$silhouette
+with(droplet_spread,reorder(data,silhouette)) -> droplet_spread$data
+```
+
+```{r}
+ggplot(data=droplet_spread,aes(x=data,y=silhouette,col=data))+geom_violin()+geom_point()+theme_bw()+
+  facet_grid(norm_method~design) 
+```
+
+
+```{r}
+droplet_spread %>% group_by(design,data,norm_method) %>% summarise(mean=mean(silhouette),sd=sd(silhouette)) -> droplet_draw
+with(droplet_draw,reorder(data,mean)) -> droplet_draw$data
+with(droplet_draw,reorder(norm_method,mean)) -> droplet_draw$norm_method
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_sil.pdf"),height=6,width=12)
+ggplot(data=droplet_draw,aes(x=data,y=mean,col=data))+geom_violin()+geom_point(data=droplet_draw,aes(x=data,y=mean,col=data),size=3)+theme_bw()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0,
+                position=position_dodge(0.05))+
+  facet_grid(norm_method~design) +
+  coord_flip()+
+  scale_colour_manual(values = mycol) +
+  labs(x="",y="silhouette widths",col="preprocess workflows",shape="design")+ theme(text=element_text(size=12))
+dev.off()
+```
+
+
+###variance plot
+
+#plate unwanted
+```{r}
+plate_spread <- plate_spread[plate_spread$design=="rnamix",]
+as.numeric(plate_spread$unwanted_variation_corr) -> plate_spread$unwanted_variation_corr
+
+with(plate_spread,reorder(data,unwanted_variation_corr)) -> plate_spread$data
+with(plate_spread,reorder(norm_method,unwanted_variation_corr)) -> plate_spread$norm_method
+
+pdf(file.path(savepath,"plate_unwantedvar_rnamix.pdf"),width=7,height = 6)
+plate_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(unwanted_variation_corr, na.rm=TRUE),digits=1)) %>% 
+  ggplot()+
+   geom_tile(aes(norm_method, data, fill= Median))+
+  geom_text(aes(norm_method, data, label= Median),color="black")+ 
+  scale_fill_distiller(palette = "Spectral") +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=15))+
+    ggtitle("Explained unwanted variance")
+dev.off()
+```
+
+
+
+#wanted
+```{r}
+as.numeric(plate_spread$wanted_variation_corr) -> plate_spread$wanted_variation_corr
+
+with(plate_spread,reorder(data,wanted_variation_corr)) -> plate_spread$data
+with(plate_spread,reorder(norm_method,wanted_variation_corr)) -> plate_spread$norm_method
+pdf(file.path(savepath,"plate_wantedvar_rnamix.pdf"),width=7,height = 6)
+plate_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(wanted_variation_corr, na.rm=TRUE),digits=1)) %>% 
+  ggplot()+
+   geom_tile(aes(norm_method, data, fill= Median))+
+  geom_text(aes(norm_method, data, label= Median),color="black")+ 
+  scale_fill_distiller(palette = "Spectral") +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=15))+
+    ggtitle("Explained wanted variance")
+dev.off()
+```
+
+
+#droplet unwanted
+```{r}
+as.numeric(droplet_spread$unwanted_variation_corr) -> droplet_spread$unwanted_variation_corr
+
+with(droplet_spread,reorder(data,unwanted_variation_corr)) -> droplet_spread$data
+with(droplet_spread,reorder(norm_method,unwanted_variation_corr)) -> droplet_spread$norm_method
+pdf(file.path(savepath,"droplet_unwantedvar.pdf"),width=7,height = 6)
+droplet_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(unwanted_variation_corr, na.rm=TRUE),digits=1)) %>% 
+  ggplot()+
+   geom_tile(aes(norm_method, data, fill= Median))+
+  geom_text(aes(norm_method, data, label= Median),color="black")+ 
+  scale_fill_distiller(palette = "Spectral") +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=15))+
+    ggtitle("Explained unwanted variance")
+dev.off()
+```
+
+
+```{r}
+as.numeric(droplet_spread$wanted_variation_corr) -> droplet_spread$wanted_variation_corr
+
+with(droplet_spread,reorder(data,wanted_variation_corr)) -> droplet_spread$data
+with(droplet_spread,reorder(norm_method,wanted_variation_corr)) -> droplet_spread$norm_method
+pdf(file.path(savepath,"droplet_wantedvar.pdf"),width=7,height = 6)
+droplet_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(wanted_variation_corr, na.rm=TRUE),digits=1)) %>% 
+  ggplot()+
+   geom_tile(aes(norm_method, data, fill= Median))+
+  geom_text(aes(norm_method, data, label= Median),color="black")+ 
+  scale_fill_distiller(palette = "Spectral") +
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  text=element_text(size=15))+
+    ggtitle("Explained wanted variance")
+dev.off
+```
+
+
+
+```{r}
+DE_methods = function(res_spread,res_column,met_column){
+  res_method = c()
+  res_coeff = c()
+  res_pval = c()
+  for(i in unique(as.character(res_spread[,met_column]))){
+    res_spread$the_method = "NO"
+    res_spread$the_method[res_spread[,met_column]==i] = "YES"
+    fit = lm(res_spread[,res_column] ~ res_spread$the_method+res_spread$design)
+    sm = summary(fit)
+    res_method = c(res_method,i)
+    res_coeff = c(res_coeff,sm$coefficients[2,1])
+    res_pval= c(res_pval,sm$coefficients[2,4])
+  }
+  res_df = data.frame(method=res_method,
+                      coefficient=res_coeff,
+                      p_value=res_pval,
+                      stringsAsFactors = FALSE)
+  return(res_df)
+}
+```
+
+
+#plate-based
+```{r}
+library(CellBench)
+plate_spread %>% dplyr::filter(!is.task_error(silhouette)) -> plate_spread
+as.numeric(plate_spread$silhouette) -> plate_spread$silhouette
+DE_methods(as.data.frame(plate_spread),res_column="silhouette",met_column="data")
+```
+
+#droplet-based
+```{r}
+droplet_spread %>% dplyr::filter(!is.task_error(silhouette)) -> droplet_spread
+as.numeric(droplet_spread $silhouette) ->droplet_spread $silhouette
+DE_methods(as.data.frame(droplet_spread ),res_column="silhouette",met_column="data")
+
+droplet_spread %>% dplyr::filter(!is.task_error(wanted_variation_corr)) -> droplet_spread
+as.numeric(droplet_spread $wanted_variation_corr) ->droplet_spread $wanted_variation_corr
+DE_methods(as.data.frame(droplet_spread ),res_column="wanted_variation_corr",met_column="data")
+
+droplet_spread %>% dplyr::filter(!is.task_error(unwanted_variation_corr)) -> droplet_spread
+as.numeric(droplet_spread $unwanted_variation_corr) ->droplet_spread $unwanted_variation_corr
+DE_methods(as.data.frame(droplet_spread ),res_column="unwanted_variation_corr",met_column="data")
+```
+
+```{r}
+DE_methods_in = function(res_spread,res_column,met_column){
+  res_method = c()
+  res_coeff = c()
+  res_pval = c()
+  for(i in unique(as.character(res_spread[,met_column]))){
+    res_spread$the_method = "NO"
+    res_spread$the_method[res_spread[,met_column]==i] = "YES"
+    fit = lm(res_spread[,res_column] ~ res_spread$the_method)
+    sm = summary(fit)
+    res_method = c(res_method,i)
+    res_coeff = c(res_coeff,sm$coefficients[2,1])
+    res_pval= c(res_pval,sm$coefficients[2,4])
+  }
+  res_df = data.frame(method=res_method,
+                      coefficient=res_coeff,
+                      p_value=res_pval,
+                      stringsAsFactors = FALSE)
+  return(res_df)
+}
+```
+
+#silhouette seems not significant
+
+
+```{r}
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% dplyr::filter(norm_method==method) %>% dplyr::filter(design=="10Xtissue")),res_column="silhouette",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+```
+
+
+```{r}
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% filter(norm_method==method) %>% filter(design=="10Xsinglecell")),res_column="silhouette",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+``` 
+#wanted 
+```{r}
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% filter(norm_method==method) %>% filter(design=="10Xtissue")),res_column="wanted_variation_corr",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+```
+
+
+```{r}
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% filter(norm_method==method) %>% filter(design=="10Xsinglecell")),res_column="wanted_variation_corr",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+```
+
+
+
+#unwanted variance
+
+```{r}
+droplet_spread %>% filter(!is.task_error(unwanted_variation_corr)) -> droplet_spread
+as.numeric(droplet_spread $unwanted_variation_corr) ->droplet_spread $unwanted_variation_corr
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% filter(norm_method==method) %>% filter(design=="10Xtissue")),res_column="unwanted_variation_corr",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+```
+
+
+```{r}
+lm_metric <-tibble()
+for (method in unique(droplet_spread$norm_method)){
+  lm <- as_tibble(DE_methods_in(as.data.frame(droplet_spread %>% filter(norm_method==method) %>% filter(design=="10Xsinglecell")),res_column="unwanted_variation_corr",met_column="data"))
+  lm$norm_method <- method
+  lm_metric <- bind_rows(lm_metric,lm)
+}
+lm_metric
+```
+

@@ -1,3 +1,0 @@
-SAMPLE_NAME	CELL_BARCODES_INDEX	R1	R2
-sc1	1-383	/stornext/General/data/user_managed/grpu_mritchie_1/SCmixology/NN79/daniela_nn79_NEXS2512_171117/SC1_S1_R1.fastq.gz	/stornext/General/data/user_managed/grpu_mritchie_1/SCmixology/NN79/daniela_nn79_NEXS2512_171117/SC1_S1_R2.fastq.gz
-
