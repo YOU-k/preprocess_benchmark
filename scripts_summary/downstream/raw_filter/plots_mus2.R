@@ -24,9 +24,11 @@ dev.off()
 
 
 #total counts density
-pdf("results/raw/mus2/total_counts_density.pdf",width = 5,height = 4)
-ggplot(zero.d) +geom_density(aes(x=total_counts_per_gene,color=preprocess),adjust = 1.2,size=1) +scale_color_manual(values = mycol) +
-  theme(text = element_text(size=20)) +theme_bw()
+pdf("results/raw/mus2/total_counts_density_above0.pdf",width = 5,height = 4)
+ggplot(zero.d[zero.d$total_counts_per_gene>0,]) +
+  geom_density(aes(x=total_counts_per_gene,color=preprocess),adjust = 1,size=1,bounds = c(0, Inf)) +
+  scale_color_manual(values = mycol) +
+  theme(text = element_text(size=20)) +theme_bw() 
 dev.off()
 
 
@@ -103,8 +105,8 @@ uselib$low <- uselib$lib< 1000
 uselib %>% group_by(low,data) %>% summarise(count=n()) -> lib2
 
 pdf("results/raw/mus2/total_counts_violin.pdf",width = 5,height = 3.5)
-ggplot(uselib) +geom_violin(aes(y=lib,x=data,color=data)) +scale_color_manual(values = mycol)+
-  geom_text(data=lib2,aes(y=1e+05,x=data,label=count)) +  facet_grid(low~.) +
+ggplot(uselib) +geom_violin(aes(y=log10(lib),x=data,color=data)) +scale_color_manual(values = mycol)+
+  #geom_text(data=lib2,aes(y=1e+05,x=data,label=count)) +  facet_grid(low~.) +
   theme(text = element_text(size=10),axis.text.x = element_text(angle = 30,hjust = 1),
         panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black")) 
 dev.off()
@@ -328,4 +330,36 @@ dev.off()
 pdf("./results/raw/cell_num_tissue2.pdf",width=5,height = 2.5)
 ggplot(number_cells) + geom_col(aes(x=preprocess,y=tissue2,fill=preprocess)) +
   scale_fill_manual(values=mycol) + coord_flip() + theme_bw() +labs(x="")
+dev.off()
+
+
+## only  cell with label violin
+
+lapply(datasets, function(sce){sce[,sce$no_label]}) -> common_data
+list(lib= get_cells_lib,
+     genes= get_cells_gene,
+     n= get_cells_n) -> libm
+
+library(CellBench)
+apply_methods(common_data,libm) -> lib
+unnest(lib %>% spread(libm,result)) -> uselib
+
+pdf("results/raw/mus2/lib_violin1.pdf",width = 5,height = 3.5)
+ggplot(uselib) +geom_violin(aes(x=reorder(data, lib),y=log10(lib),col=data))+scale_color_manual(values = mycol)+ 
+  theme(text = element_text(size=10),
+        panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black"),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x="",y="Total counts per cell (log)",col="Preprocessing workflows")
+dev.off()
+
+pdf("results/raw/mus2/genes_violin1.pdf",width = 5,height = 3.5)
+ggplot(uselib) +geom_violin(aes(x=reorder(data, genes),y=log10(genes),col=data))+scale_color_manual(values = mycol)+ 
+  theme(text = element_text(size=10),
+        panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black"),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(x="",y="Number of detected genes per cell (log)",col="Preprocessing workflows")
 dev.off()

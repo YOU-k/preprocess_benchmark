@@ -1,0 +1,213 @@
+```{r}
+DE_methods_in = function(res_spread,res_column,met_column){
+  res_method = c()
+  res_coeff = c()
+  res_pval = c()
+  for(i in unique(as.character(res_spread[,met_column]))){
+    res_spread$the_method = "NO"
+    res_spread$the_method[res_spread[,met_column]==i] = "YES"
+    fit = lm(res_spread[,res_column] ~ res_spread$the_method)
+    sm = summary(fit)
+    res_method = c(res_method,i)
+    res_coeff = c(res_coeff,sm$coefficients[2,1])
+    res_pval= c(res_pval,sm$coefficients[2,4])
+  }
+  res_df = data.frame(method=res_method,
+                      coefficient=res_coeff,
+                      p_value=res_pval,
+                      stringsAsFactors = FALSE)
+  return(res_df)
+}
+```
+
+```{r}
+plate_mixture_spread %>% filter(!norm_method=="none") -> plate_mixture_spread_filtered
+plate_singlecell_spread %>% filter(!norm_method=="none") -> plate_singlecell_spread_filtered
+spreads <- bind_rows(
+  droplet_pbmc_spread_filtered %>% mutate(type="PBMC"),
+  droplet_tissue_spread_filtered %>% mutate(type="Lung_tissue"),
+  droplet_singlecell_spread_filtered %>% mutate(type="Droplet-based cell_line"),
+  plate_singlecell_spread_filtered %>% mutate(type="Plate-based cell_line"),
+  plate_mixture_spread_filtered%>% mutate(type="RNAmix"))
+
+spreads %>% filter(!cluster_method=="RaceID") -> spreads
+```
+
+
+```{r}
+all_rank <- tibble()
+type=c("PBMC","Lung_tissue","Droplet-based cell_line","Plate-based cell_line","RNAmix")
+metrics=c("cluster_accuracy","cluster_purity","ARI")
+for (d in type) {
+  for (m in metrics) {
+  tmp <- spreads[spreads$type==d,]
+  data_ari<- DE_methods_in(as.data.frame(tmp),res_column=m,met_column="data")
+  data_ari$methodtype <- "preprocess workflow"
+  norm_ari <- DE_methods_in(as.data.frame(tmp),res_column=m,met_column="norm_method")
+  norm_ari$methodtype <- "normalization method"
+  cluster_ari <- DE_methods_in(as.data.frame(tmp),res_column=m,met_column="cluster_method")
+  cluster_ari$methodtype <- "clustering method"
+ 
+ 
+ bind_rows(data_ari,norm_ari,cluster_ari) %>% 
+  mutate(ordering= as.numeric(as.factor(methodtype)) + coefficient,
+         method= fct_reorder(method,ordering,.desc = T)) -> coef_tmp
+ 
+ coef_tmp[coef_tmp$methodtype=="preprocess workflow",]  -> pre_tmp
+  pre_tmp$metric <- m
+  pre_tmp$type <- d
+  as.data.frame(pre_tmp) -> pre_tmp
+  as.numeric(as.character(pre_tmp$coefficient)) -> pre_tmp$coefficient
+ if (m=="ARI"){
+   pre_tmp$rank <- rank(-pre_tmp$coefficient)
+ } else {
+   pre_tmp$rank <- rank(pre_tmp$coefficient)
+ }
+ bind_rows(pre_tmp,all_rank) -> all_rank
+ 
+ #saveRDS(coef_tmp,paste0("/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/cluster_coef/",d,"_",m,".rds"))
+ pdf(paste0("/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/clustering/coef/",d,"_",m,".pdf"),width = 7,height = 3.5)
+ p <- coef_tmp %>% 
+       ggplot() + geom_col(aes(x=method,y=coefficient,fill=methodtype))+
+  scale_fill_brewer(palette = "Paired") +
+  theme(
+  axis.text.x = element_text(angle = 90, hjust = 1),
+  axis.ticks = element_blank(),
+  text=element_text(size=15)) +
+  labs(x="",fill="Processing steps",title=paste0(d,"_",m) ,y="Coefficient")
+ print(p)
+ dev.off()
+  }
+  
+}
+
+```
+
+
+```{r}
+  all_rank %>% group_by(type, method) %>% summarise(rank=mean(rank)) %>% 
+  mutate(rank=as.numeric(rank)) -> tmp_rank
+tmp_rank[tmp_rank$type %in% c("Plate-based cell_line","RNAmix"),] -> plate_rank
+
+tmp_rank[!tmp_rank$type %in% c("Plate-based cell_line","RNAmix"),] -> droplet_rank
+```
+
+```{r}
+pdf("/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/clustering/rank/plate_rank.pdf",width = 6,height = 3)
+ggplot(plate_rank,aes(x= reorder(method,rank),
+                          y= reorder(type,rank),label=round(rank,1))) + 
+  geom_tile(aes(fill=rank)) +
+  scale_fill_gradient(low = "white", high = "#00798c") +
+  geom_text() +theme(axis.text.x = element_text(angle = 30),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20"),
+          text=element_text(size=15)) +
+  labs(x="",y="",fill="Rank")
+dev.off()
+```
+
+```{r}
+pdf("/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/clustering/rank/droplet_rank.pdf",width = 7,height = 3.5)
+ggplot(droplet_rank,aes(x= reorder(method,rank),
+                          y= type,label=round(rank,1))) + 
+  geom_tile(aes(fill=rank)) +
+  scale_fill_gradient(low = "white", high = "#00798c") +
+  geom_text() +theme(axis.text.x = element_text(angle = 30),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20"),
+          text=element_text(size=15)) +
+  labs(x="",y="",fill="Rank")
+dev.off()
+```
+
+
+
+
+#anova
+
+```{r}
+#ARI
+all_ari <- tibble()
+for (d in type) {
+    tmp_spread <- spreads[spreads$type==d,]
+  if (length(unique(tmp_spread$design)) == 1){
+      aov(ARI ~ data+norm_method+cluster_method, data = tmp_spread)-> tmp_anova
+      anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  } else {
+    aov(ARI ~ data+norm_method+cluster_method+design, data = tmp_spread)-> tmp_anova
+    anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  }
+
+  data.frame(anova=anova1, step=c("Preprocess workflow","Normalization method","Clustering method","Residual")) -> db
+  db$metric <- "ARI"
+  db$design <- d
+  bind_rows(db,all_ari) -> all_ari
+}
+
+
+```
+
+
+```{r}
+all_eca <- tibble()
+for (d in type) {
+    tmp_spread <- spreads[spreads$type==d,]
+  if (length(unique(tmp_spread$design)) == 1){
+      aov(cluster_accuracy ~ data+norm_method+cluster_method, data = tmp_spread)-> tmp_anova
+      anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  } else {
+    aov(cluster_accuracy ~ data+norm_method+cluster_method+design, data = tmp_spread)-> tmp_anova
+    anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  }
+
+  data.frame(anova=anova1, step=c("Preprocess workflow","Normalization method","Clustering method","Residual")) -> db
+  db$metric <- "ECA"
+  db$design <- d
+  bind_rows(db,all_eca) -> all_eca
+}
+
+```
+
+
+```{r}
+all_ecp <- tibble()
+for (d in type) {
+    tmp_spread <- spreads[spreads$type==d,]
+  if (length(unique(tmp_spread$design)) == 1){
+      aov(cluster_purity ~ data+norm_method+cluster_method, data = tmp_spread)-> tmp_anova
+      anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  } else {
+    aov(cluster_purity ~ data+norm_method+cluster_method+design, data = tmp_spread)-> tmp_anova
+    anova1=c(summary(tmp_anova)[[1]][1:4,2])
+  }
+
+  data.frame(anova=anova1, step=c("Preprocess workflow","Normalization method","Clustering method","Residual")) -> db
+  db$metric <- "ECP"
+  db$design <- d
+  bind_rows(db,all_eca) -> all_eca
+}
+
+```
+
+```{r}
+pdf("/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/clustering/rank/anova_rank.pdf",width = 11,height = 2)
+full_join(bind_rows(all_ari,all_eca,all_ecp) %>% 
+  group_by(metric,design) %>% summarise(all=sum(anova)), bind_rows(all_ari,all_eca,all_ecp)) %>% 
+  mutate(pct=anova/all) %>% filter(!step=="Residual") %>% 
+  mutate(design=factor(design,levels=c("RNAmix","Plate-based cell_line","Droplet-based cell_line","Lung_tissue","PBMC"))) %>% 
+ggplot() +geom_col(aes(x=step,y=pct,fill=metric),position = "dodge2") + 
+  coord_flip() +
+  facet_wrap(design~.,scales = "free_x",ncol = 5) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_bw() +
+  labs(x="",y="",fill="Metrics")
+dev.off()
+```
+
+
+
+

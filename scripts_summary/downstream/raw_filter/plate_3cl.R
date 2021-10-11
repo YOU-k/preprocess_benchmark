@@ -145,7 +145,8 @@ calculateQCMet(sc1) ->sc1
 sc1 <- sc1[rowSums(counts(sc1))>0,]
 data.frame(total_counts_per_gene =log10(rowSums(counts(sc1))) ,
            pct.zeros= rowSums(counts(sc1)==0)/ncol(sc1),
-           preprocess="scPipe") -> zero.d.scpipe
+           preprocess="scPipe",
+           biotype=rowData(sc1)$gene_biotype) -> zero.d.scpipe
 
 #biotype
 library(tidyverse)
@@ -162,7 +163,7 @@ scp_sc1_qc$keep <- FALSE
 scp_sc1_qc$keep[scp_sc1_qc$outliers=="FALSE"] <- TRUE
 
 
-plotfc(scp_sc1_qc,"plate_3cl/scpipe_rmout_fc")
+#plotfc(scp_sc1_qc,"plate_3cl/scpipe_rmout_fc")
 data.frame(total_counts_per_cell = log10(scp_sc1_qc$total),
            kept = scp_sc1_qc$keep,
            Mito_percent_per_cell= scp_sc1_qc$subsets_Mito_percent,
@@ -174,6 +175,7 @@ data.frame(total_counts_per_cell = log10(scp_sc1_qc$total),
 #use scater
 scater_filter(sc1) -> sc1_f
 table(sc1_f)
+
 sc1$keep <-sc1_f
 
 saveRDS(gene_filter(sc1[,sc1$keep]),file.path(write.path,"plate3cl_scpipe.rds"))
@@ -205,10 +207,12 @@ colnames(zumis_sc1) <- colnames(count_sc1)
 zumis_sc1$barcode <- barcode_info$index[match(colnames(zumis_sc1),barcode_info$samplename)]
 
 zumis_sc1 <- zumis_sc1[rowSums(counts(zumis_sc1))>0,]
+calculateQCMet(zumis_sc1) ->zumis_sc1
 data.frame(total_counts_per_gene =log10(rowSums(counts(zumis_sc1))) ,
            pct.zeros= rowSums(counts(zumis_sc1)==0)/ncol(zumis_sc1),
-           preprocess="zUMIs") -> zero.d.zumis
-calculateQCMet(zumis_sc1) ->zumis_sc1
+           preprocess="zUMIs",
+           biotype=rowData(zumis_sc1)$gene_biotype) -> zero.d.zumis
+
 
 
 zumis_f<- scater_filter(zumis_sc1)
@@ -217,7 +221,7 @@ as.data.frame(rowData(zumis_sc1)) %>% dplyr::group_by(gene_biotype) %>% summaris
 
 
 zumis_sc1$keep <-zumis_f
-plotfc(zumis_sc1,"plate_3cl/zumis_scater_fc")
+#plotfc(zumis_sc1,"plate_3cl/zumis_scater_fc")
 
 
 #only exon 
@@ -243,7 +247,7 @@ as.data.frame(rowData(zumis_sc2)) %>% dplyr::group_by(gene_biotype) %>% summaris
 
 zumis_f<- scater_filter(zumis_sc1)
 zumis_sc1$keep <-zumis_f
-plotfc(zumis_sc1,"plate_3cl/zumis_scater_fc")
+#plotfc(zumis_sc1,"plate_3cl/zumis_scater_fc")
 
 data.frame(total_counts_per_cell = log10(zumis_sc1$total),
            kept = zumis_sc1$keep,
@@ -268,10 +272,12 @@ celseq_sc1 <- SingleCellExperiment(
 colnames(celseq_sc1) <- colnames(cs_mat)
 
 celseq_sc1 <- celseq_sc1[rowSums(counts(celseq_sc1))>0,]
+calculateQCMet(celseq_sc1) ->celseq_sc1
 data.frame(total_counts_per_gene =log10(rowSums(counts(celseq_sc1))) ,
            pct.zeros= rowSums(counts(celseq_sc1)==0)/ncol(celseq_sc1),
-           preprocess="celseq2") -> zero.d.celseq2
-calculateQCMet(celseq_sc1) ->celseq_sc1
+           preprocess="celseq2",
+           biotype=rowData(celseq_sc1)$gene_biotype) -> zero.d.celseq2
+
 
 celseq_sc1$barcode <- barcode_info$index[match(colnames(celseq_sc1),barcode_info$samplename)]
 celseq_f<- scater_filter(celseq_sc1)
@@ -311,7 +317,8 @@ calculateQCMet(scruff_sc1) ->scruff_sc1
 scruff_sc1 <- scruff_sc1[rowSums(counts(scruff_sc1))>0,]
 data.frame(total_counts_per_gene =log10(rowSums(counts(scruff_sc1))) ,
            pct.zeros= rowSums(counts(scruff_sc1)==0)/ncol(scruff_sc1),
-           preprocess="scruff") -> zero.d.scruff
+           preprocess="scruff",
+           biotype=rowData(scruff_sc1)$gene_biotype) -> zero.d.scruff
 scruff_f<- scater_filter(scruff_sc1)
 
 as.data.frame(rowData(scruff_sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n())  %>% mutate(preprocess="scruff") ->gene_biotype_scruff
@@ -352,7 +359,8 @@ kb_sc1$barcode <- barcode_info$index[match(colnames(kb_sc1),barcode_info$samplen
 kb_sc1 <- kb_sc1[rowSums(counts(kb_sc1))>0,]
 data.frame(total_counts_per_gene =log10(rowSums(counts(kb_sc1))) ,
            pct.zeros= rowSums(counts(kb_sc1)==0)/ncol(kb_sc1),
-           preprocess="kallisto bustools") -> zero.d.kb
+           preprocess="kallisto bustools",
+           biotype=rowData(kb_sc1)$gene_biotype) -> zero.d.kb
 
 
 as.data.frame(rowData(kb_sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="kallisto bustools") ->gene_biotype_kb
@@ -457,10 +465,12 @@ plotglmpca <- function(sce,name){
   color[which(color=="HCC827")] <- "green"
   color[is.na(color)] <-"grey"
   
-  color[!colnames(sce) %in% allbc & color=="green"] <- "darkgreen"
-  color[!colnames(sce) %in% allbc & color=="blue"] <- "darkblue"
-  color[!colnames(sce) %in% allbc & color=="red"] <- "darkred"
-  png(paste0(plotpath,"/",name,"all.png"),res=250,width = 5,height = 5, units = "in")
+  #color[!colnames(sce) %in% allbc & color=="green"] <- "darkgreen"
+  #color[!colnames(sce) %in% allbc & color=="blue"] <- "darkblue"
+  #color[!colnames(sce) %in% allbc & color=="red"] <- "darkred"
+  plotpath="/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/results/plate_based/"
+  #png(paste0(plotpath,"/",name,"all.png"),res=250,width = 5,height = 5, units = "in")
+  png(paste0(plotpath,"/","kallisto_plate3cl.png"),res=250,width = 5,height = 5, units = "in")
   plot(factors[,1],factors[,2],col= color,pch=19, cex = .8)
   dev.off()
 }
@@ -593,12 +603,36 @@ calculate_cor <- function(pp){
 
 cors <- data.frame(preprocess = rep(names(counts_all),each=length(allbc)),
                    correlation = calculate_cor(1))
+saveRDS(cors,"SCE/raw/cor/plate_3cl_cor_pearson.rds")
+
+
+
+#add kb
+intersect(colnames(sc1),colnames(kb_sc1)) -> bc_kb
+intersect(rownames(sc1),rownames(kb_sc1)) -> gene_kb
+
+get_overlap_counts <- function(sce){
+  sce[rownames(sce) %in% gene_kb,colnames(sce) %in% bc_kb]  -> sce
+  sce[match(gene_kb,rownames(sce)),match(bc_kb,colnames(sce))] ->sce
+  return(as.matrix(counts(sce)))
+}
+
+dd <- list(`scPipe` = sc1,`kallisto bustools` = kb_sc1)
+
+lapply(dd, get_overlap_counts) -> counts_all
+
+cors <- data.frame(preprocess = rep(names(counts_all),each=length(bc_kb)),
+                   correlation = calculate_cor(1))
+
+bind_rows(cors[cors$preprocess=="kallisto bustools",],plate_3cl_cor_pearson) -> cors
 ## 1 above was to specify scpipe
-pdf("results/raw/plate_3cl/correlation.pdf",width = 5,height = 3.5)
+pdf("results/raw/plate_3cl/correlation.pdf",width = 5,height = 4)
 ggplot(cors[!cors$preprocess=="scPipe",]) + geom_boxplot(aes(x=reorder(preprocess, -correlation),y=correlation,color=preprocess)) +
-  scale_color_manual(values = mycol) + theme(text = element_text(size=12),axis.text.x = element_text(angle = 30,hjust = 1),
-                                             panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black")) 
+  scale_color_manual(values = mycol) + theme(text = element_text(size=12),axis.text.x = element_text(angle = 15),
+                                             panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black"))  +
+  labs(x="",y="Pearson Correlation coefficient")
 dev.off()
+saveRDS(cors,"SCE/raw/cor/plate_3cl_cor_pearson.rds")
 
 saveRDS(umi_counts,"SCE/raw/cor/plate_3cl_cors.rds")
 
@@ -649,3 +683,61 @@ ggplot(data=filter.d,aes(x=preprocess,y=detected)) +
   #scale_fill_manual(values = mycol)+
   theme_bw() + labs(x="",y="Number of detected genes per cell",fill="preprocess")
 dev.off()
+
+
+
+
+
+
+
+
+
+
+
+#kb compared to scpipe
+identical(colnames(sc1),colnames(kb_sc1))
+data.frame(total_counts=sc1$total,
+           detetced_g = sc1$detected,
+           bc=colnames(sc1),
+           keep=sc1$keep) -> scpipe_info
+data.frame(total_countsk=kb_sc1$total,
+           detetced_gk = kb_sc1$detected,
+           bc=colnames(kb_sc1),
+           keepk=kb_sc1$keep) -> kb_info
+full_join(kb_info,scpipe_info) -> p
+library(ggpubr)
+
+pdf("../plots_added/plate_3cl_kb_scpipe_total.pdf",width=8,height = 3)
+
+p1 <- ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(total_counts),y=log10(total_countsk),col=keep)) +theme_bw() +
+  scale_color_brewer(palette = "Set1") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title="Total counts per cell",col="Kept in scPipe")
+p2 <- ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(total_counts),y=log10(total_countsk),col=keepk)) +theme_bw() +
+  scale_color_brewer(palette = "Set1") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title=" ",col="Kept in kb")
+ggarrange(p1,p2)
+
+dev.off()
+
+
+pdf("../plots_added/plate_3cl_kb_scpipe_gene.pdf",width=8,height = 3)
+
+p1 <- ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(detetced_g),y=log10(detetced_gk),col=keep)) +theme_bw() +
+  scale_color_brewer(palette = "Set1") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title="Number of detected genes per cell",col="Kept in scPipe")
+p2 <- ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(detetced_g),y=log10(detetced_gk),col=keepk)) +theme_bw() +
+  scale_color_brewer(palette = "Set1") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title=" ",col="Kept in kb")
+ggarrange(p1,p2)
+
+dev.off()
+
+
+
+
+
+ggplot(unnest(lib %>% spread(libm,result))) +geom_violin(aes(y=log10(lib),x=data,color=data)) +scale_color_manual(values = mycol)+
+  geom_hline(yintercept= log10(4096)) +
+  theme(text = element_text(size=12),axis.text.x = element_text(angle = 30,hjust = 1),
+        panel.background = element_rect(fill = "white"),axis.line = element_line(colour = "black")) 
+

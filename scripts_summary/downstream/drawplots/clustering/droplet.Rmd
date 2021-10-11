@@ -1,0 +1,423 @@
+###droplet_singlecell
+```{r}
+library(tidyverse)
+library(CellBench)
+eval.path <- "/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/cluster/"
+savepath <- "/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/clustering/"
+
+
+setwd(eval.path)
+files=c("sc3cl_cluster_eval","sc5cl_cluster_eval_svm","sc5cl_cluster_eval","sc5clv3_cluster_eval_svm","sc5clv3_cluster_eval")
+paste0(files,".rds") -> files
+lapply(files, function(file){readRDS(file)}) -> result0
+bind_rows(result0) -> result0
+
+table(result0$design)
+table(result0$cluster_method)
+
+result0 %>% dplyr::filter(!is.task_error(result)) -> droplet_singlecell
+as.numeric(droplet_singlecell$result) ->droplet_singlecell$result
+
+droplet_singlecell %>% spread(clustering_evaluation,result) -> droplet_singlecell_spread
+```
+
+
+
+```{r}
+droplet_singlecell_spread %>% filter(!norm_method=="none") -> droplet_singlecell_spread_filtered
+pdf(file.path(savepath,"celline_ari_vln_cluster.pdf"),height = 3.5,width = 8)
+ggplot(droplet_singlecell_spread_filtered,aes(x=reorder(data,ARI),y=ARI))+
+   theme(axis.text.x = element_text(angle = 30),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20")) +
+  geom_violin() +
+  geom_jitter(size=1,alpha=1,aes(col=cluster_method))+
+  scale_color_manual(values=cluster_col) +
+  labs(title="Droplet-based cell lines",x="",col="Clustering methods")+theme(text= element_text(size=13))
+dev.off()
+```
+
+```{r}
+library(reshape2)
+dcast(droplet_singlecell_spread_filtered %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> droplet_singlecell_heatmap
+droplet_singlecell_heatmap[droplet_singlecell_heatmap=="-Inf"] <-NA 
+rownames(droplet_singlecell_heatmap) <- droplet_singlecell_heatmap[,1]
+droplet_singlecell_heatmap[,-1] -> droplet_singlecell_heatmap
+```
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"celline_ari_heatmap_median.pdf"),height = 4,width=8)
+pheatmap(droplet_singlecell_heatmap[,order(apply(droplet_singlecell_heatmap,2,median),decreasing = TRUE)][order(apply(droplet_singlecell_heatmap,1,median),decreasing = TRUE),], 
+         colorRampPalette(rev(brewer.pal(n = 7, name = "Blues")))(50),
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_singlecell_heatmap),
+           row.names = colnames(droplet_singlecell_heatmap)), 
+         annotation_colors  = list(preprocess=droplet_col),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_singlecell_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+
+```{r}
+library(reshape2)
+my.max <- function(x){
+  return(max(x,na.rm = TRUE))}
+dcast(droplet_singlecell_spread_filtered %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,my.max)-> droplet_singlecell_heatmap
+droplet_singlecell_heatmap[droplet_singlecell_heatmap=="-Inf"] <-NA 
+rownames(droplet_singlecell_heatmap) <- droplet_singlecell_heatmap[,1]
+droplet_singlecell_heatmap[,-1] -> droplet_singlecell_heatmap
+```
+
+
+
+```{r}
+library(pheatmap)
+#pdf(file.path(savepath,"plate_mixture_ari_heatmap_median.pdf"),height = 4,width=7)
+pheatmap(droplet_singlecell_heatmap[,order(apply(droplet_singlecell_heatmap,2,my.max),decreasing = TRUE)][order(apply(droplet_singlecell_heatmap,1,my.max),decreasing = TRUE),], 
+         colorRampPalette(rev(brewer.pal(n = 7, name = "Blues")))(50),
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_singlecell_heatmap),
+           row.names = colnames(droplet_singlecell_heatmap)), 
+         annotation_colors  = list(preprocess=droplet_col),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_singlecell_heatmap,2,my.max))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+```
+
+
+```{r}
+entropy_sel_top = function(res,topn=2){
+  top_res = NULL
+  for (i in unique(res$data)){
+    tmp = res[res$data==i,]
+    tmp = tmp[order(tmp$entropy_sum,decreasing = FALSE)[1:min(topn,nrow(tmp))],]
+    if(is.null(top_res)){
+      top_res=tmp
+    }else{
+      top_res = rbind(tmp,top_res)
+    }
+  }
+  return(top_res)
+}
+```
+
+```{r}
+droplet_singlecell_spread_filtered$entropy_sum = sqrt(droplet_singlecell_spread_filtered$cluster_purity^2+droplet_singlecell_spread_filtered$cluster_accuracy^2)
+droplet_singlecell_spread_filtered_top=entropy_sel_top(droplet_singlecell_spread_filtered)
+
+```
+
+```{r}
+#pdf(file.path(savepath,"plate_rnamix_entropy_norm.pdf"),height = 3.5,width = 5.8)
+ggplot(data=droplet_singlecell_spread_filtered,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=norm_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(droplet_singlecell_spread_filtered$norm_method))+
+  scale_colour_manual(values = droplet_col)+
+  labs(x="entropy of cluster purity",y="entropy of cluster accuracy",col="preprocess workflow",shape="Normalization method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+#dev.off()
+```
+```{r}
+#brewer.pal("Set2",n = 8) ->cluster_col
+#names(cluster_col) <- unique(droplet_singlecell$cluster_method)
+droplet_singlecell_spread %>% dplyr::filter(cluster_accuracy==0) %>% 
+  dplyr::filter(cluster_purity==0) %>% group_by(data,cluster_method) %>% summarise(n=n()) -> droplet_count
+droplet_count$n <- as.numeric(droplet_count$n)
+pdf(file.path(savepath, "celline_plate_entropy0.pdf"),height = 3.5,width = 5)
+ggplot(droplet_count) + geom_col(aes(x= reorder(data,n), y=n, fill= cluster_method)) +
+  theme(axis.text.x = element_text(angle = 45),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20")) +
+  labs(x= "", y="Frequency", fill="Clustering method") + scale_fill_manual(values = cluster_col)
+dev.off()  
+```
+
+
+#droplet_lungtissue
+
+```{r}
+eval.path <- "/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/cluster/"
+setwd(eval.path)
+files=c("mus2_cluster_eval","mus1_cluster_eval")
+paste0(files,".rds") -> files
+lapply(files, function(file){readRDS(file)}) -> result0
+bind_rows(result0) -> result0
+
+table(result0$design)
+table(result0$cluster_method)
+
+result0 %>% dplyr::filter(!is.task_error(result)) -> droplet_tissue
+as.numeric(droplet_tissue$result) ->droplet_tissue$result
+
+droplet_tissue %>% spread(clustering_evaluation,result) -> droplet_tissue_spread
+```
+
+
+```{r}
+library(reshape2)
+dcast(droplet_tissue_spread_filtered %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> droplet_tissue_heatmap
+droplet_tissue_heatmap[droplet_tissue_heatmap=="-Inf"] <-NA 
+rownames(droplet_tissue_heatmap) <- droplet_tissue_heatmap[,1]
+droplet_tissue_heatmap[,-1] -> droplet_tissue_heatmap
+```
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"tissue_ari_heatmap_median.pdf"),height = 4,width=8)
+pheatmap(droplet_tissue_heatmap[,order(apply(droplet_tissue_heatmap,2,median),decreasing = TRUE)][order(apply(droplet_tissue_heatmap,1,median),decreasing = TRUE),], 
+         colorRampPalette(rev(brewer.pal(n = 7, name = "Blues")))(50),
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_tissue_heatmap),
+           row.names = colnames(droplet_tissue_heatmap)), 
+         annotation_colors  = list(preprocess=droplet_col),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_tissue_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+
+```{r}
+droplet_tissue_spread %>% filter(!norm_method %in% c("none")) -> droplet_tissue_spread_filtered
+droplet_tissue_spread_filtered %>% filter(!cluster_method %in% c("RaceID","sc3_SVM")) -> droplet_tissue1
+pdf(file.path(savepath,"tissue_ari_vln_cluster.pdf"),height = 3.5,width = 8)
+ggplot(droplet_tissue_spread_filtered,aes(x=reorder(data,ARI),y=ARI))+
+  theme(axis.text.x = element_text(angle = 30),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20")) +
+  labs(x= "", y="Frequency", fill="Clustering method") + scale_fill_manual(values = cluster_col)+
+  geom_violin() +
+  geom_jitter(size=1,alpha=1,aes(col=cluster_method))+
+  scale_color_manual(values=cluster_col) +
+  labs(title="Lung tissue",x="",col="Clustering methods")+theme(text= element_text(size=13))
+dev.off()
+```
+```{r}
+ggplot(droplet_tissue1,aes(x=reorder(data,cluster_accuracy),y=cluster_accuracy,col=data))+
+  theme_bw()+  geom_violin() +
+  geom_jitter(size=1,alpha=0.5)+
+  scale_color_manual(values=droplet_col) +
+  labs(title="Lung tissue",x="",col="Preprocessing workflows")+theme(text= element_text(size=13))
+```
+
+```{r}
+ggplot(droplet_tissue1,aes(x=reorder(data,cluster_purity),y=cluster_purity,col=data))+
+  theme_bw()+  geom_violin() +
+  geom_jitter(size=1,alpha=0.5)+
+  scale_color_manual(values=droplet_col) +
+  labs(title="Lung tissue",x="",col="Preprocessing workflows")+theme(text= element_text(size=13))
+```
+```{r}
+entropy_sel_top = function(res,topn=5){
+  top_res = NULL
+  for (i in unique(res$data)){
+    tmp = res[res$data==i,]
+    tmp = tmp[order(tmp$entropy_sum,decreasing = FALSE)[1:min(topn,nrow(tmp))],]
+    if(is.null(top_res)){
+      top_res=tmp
+    }else{
+      top_res = rbind(tmp,top_res)
+    }
+  }
+  return(top_res)
+}
+```
+
+```{r}
+droplet_tissue_spread$entropy_sum = sqrt(droplet_tissue_spread$cluster_purity^2+droplet_tissue_spread$cluster_accuracy^2)
+droplet_tissue_spread_top=entropy_sel_top(droplet_tissue_spread)
+as.factor(droplet_tissue_spread$cluster_method)->droplet_tissue_spread$cluster_method
+droplet_tissue_spread_top$norm_cluster = paste(droplet_tissue_spread_top$norm_method,droplet_tissue_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_tissue_entropy_norm.pdf"),height = 3.5,width = 5.8)
+ggplot(data=droplet_tissue_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=norm_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(droplet_tissue_spread_top$norm_method))+
+  scale_colour_manual(values = droplet_col)+
+  labs(x="Entropy of cluster purity",y="Entropy of cluster accuracy",col="Preprocess workflow",shape="Normalization method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+```{r}
+pdf(file.path(savepath,"droplet_tissue_entropy_cluster.pdf"),height = 3.5,width = 5.8)
+ggplot(data=droplet_tissue_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(droplet_tissue_spread_top$cluster_method))+
+  scale_colour_manual(values = droplet_col)+
+  labs(x="Entropy of cluster purity",y="Entropy of cluster accuracy",col="Preprocess workflow",shape="Cluster method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+
+
+
+
+
+# pbmc
+```{r}
+eval.path <- "/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/cluster/"
+setwd(eval.path)
+files=c("pbmc10k_cluster_eval","pbmc5k_cluster_eval","pbmc10k_cluster_eval_svm","pbmc10k_cluster_eval2","pbmc5k_cluster_eval_svm")
+paste0(files,".rds") -> files
+lapply(files, function(file){readRDS(file)}) -> result0
+
+
+lapply(result0, function(x){return(x[!is.task_error(x$result),])}) -> result0
+
+numeric_result <- function(x){
+  x$result <- as.numeric(x$result)
+  return(x)
+}
+
+lapply(result0, numeric_result) -> result0
+bind_rows(result0) -> result0
+
+table(result0$design)
+table(result0$cluster_method)
+
+result0 %>% dplyr::filter(!is.task_error(result)) -> droplet_pbmc
+as.numeric(droplet_pbmc$result) ->droplet_pbmc$result
+
+droplet_pbmc %>% spread(clustering_evaluation,result) -> droplet_pbmc_spread
+```
+
+
+```{r}
+library(reshape2)
+dcast(droplet_pbmc_spread_filtered %>% dplyr::select(data,cluster_method,ARI),cluster_method ~data,median)-> droplet_pbmc_heatmap
+droplet_pbmc_heatmap[droplet_pbmc_heatmap=="-Inf"] <-NA 
+rownames(droplet_pbmc_heatmap) <- droplet_pbmc_heatmap[,1]
+droplet_pbmc_heatmap[,-1] -> droplet_pbmc_heatmap
+```
+
+
+```{r}
+library(pheatmap)
+pdf(file.path(savepath,"pbmc_ari_heatmap_median.pdf"),height = 4,width=8)
+pheatmap(droplet_pbmc_heatmap[,order(apply(droplet_pbmc_heatmap,2,median),decreasing = TRUE)][order(apply(droplet_pbmc_heatmap,1,median),decreasing = TRUE),], 
+         colorRampPalette(rev(brewer.pal(n = 7, name = "Blues")))(50),
+         annotation_col = data.frame(
+           preprocess = colnames(droplet_pbmc_heatmap),
+           row.names = colnames(droplet_pbmc_heatmap)), 
+         annotation_colors  = list(preprocess=droplet_col),
+         display_numbers = TRUE,
+         columns = 
+           names(order(apply(droplet_pbmc_heatmap,2,median))),
+         max.labels = Inf,
+         normalize = TRUE,
+         show.labels = FALSE,
+         fontsize = 15,
+         show_colnames = FALSE,
+         cluster_cols=FALSE,
+         cluster_rows = FALSE)
+dev.off()
+
+```
+
+
+```{r}
+droplet_pbmc_spread %>% filter(!norm_method %in% c("none")) -> droplet_pbmc_spread_filtered
+pdf(file.path(savepath,"pbmc_ari_vln_cluster.pdf"),height = 3.5,width = 8)
+ggplot(droplet_pbmc_spread_filtered,aes(x=reorder(data,ARI),y=ARI))+
+  theme(axis.text.x = element_text(angle = 30),
+        panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20")) +
+  labs(x= "", y="Frequency", fill="Clustering method") + scale_fill_manual(values = cluster_col)+
+  geom_violin() +
+  geom_jitter(size=1,alpha=1,aes(col=cluster_method))+
+  scale_color_manual(values=cluster_col) +
+  labs(title="PBMC",x="",col="Clustering methods")+theme(text= element_text(size=13))
+dev.off()
+```
+```{r}
+entropy_sel_top = function(res,topn=5){
+  top_res = NULL
+  for (i in unique(res$data)){
+    tmp = res[res$data==i,]
+    tmp = tmp[order(tmp$entropy_sum,decreasing = FALSE)[1:min(topn,nrow(tmp))],]
+    if(is.null(top_res)){
+      top_res=tmp
+    }else{
+      top_res = rbind(tmp,top_res)
+    }
+  }
+  return(top_res)
+}
+```
+
+```{r}
+droplet_pbmc_spread$entropy_sum = sqrt(droplet_pbmc_spread$cluster_purity^2+droplet_pbmc_spread$cluster_accuracy^2)
+droplet_pbmc_spread_top=entropy_sel_top(droplet_pbmc_spread)
+as.factor(droplet_pbmc_spread$cluster_method)->droplet_pbmc_spread$cluster_method
+droplet_pbmc_spread_top$norm_cluster = paste(droplet_pbmc_spread_top$norm_method,droplet_pbmc_spread_top$cluster_method,sep="_")
+```
+
+```{r}
+pdf(file.path(savepath,"droplet_pbmc_entropy_norm.pdf"),height = 3.5,width = 5.8)
+ggplot(data=droplet_pbmc_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=norm_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(droplet_pbmc_spread_top$norm_method))+
+  scale_colour_manual(values = droplet_col)+
+  labs(x="Entropy of cluster purity",y="Entropy of cluster accuracy",col="Preprocess workflow",shape="Normalization method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+```{r}
+pdf(file.path(savepath,"droplet_pbmc_entropy_cluster.pdf"),height = 3.5,width = 5.8)
+ggplot(data=droplet_pbmc_spread_top,aes(x=cluster_purity,y=cluster_accuracy,col=data,shape=cluster_method))+
+  geom_point(size=2)+
+  scale_shape_manual(values=1:nlevels(droplet_pbmc_spread_top$cluster_method))+
+  scale_colour_manual(values = droplet_col)+
+  labs(x="Entropy of cluster purity",y="Entropy of cluster accuracy",col="Preprocess workflow",shape="Cluster method")+
+  theme_bw()+
+  #facet_grid(.~cluster_method)
+  theme(text = element_text(size=15),legend.position="right")
+dev.off()
+```
+
+

@@ -95,7 +95,7 @@ norm_method <- list(
 )
 
   
-design=c("cellmix1","cellmix2","cellmix4","rnamix")
+design=c("rnamix")
 dataname=c("scpipe","zumis","celseq","scruff")
 paste(apply(expand.grid(design, dataname), 1, paste, collapse="_"), ".rds",sep="") ->files
 

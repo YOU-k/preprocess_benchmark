@@ -2,9 +2,11 @@ library(scran)
 library(scater)
 library(CellBench)
 library(tidyverse)
-write.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/cluster"
-read.path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/norm/hvged"
-plate_mixture_hvged <- readRDS(file.path(read.path,"plate_mixture_hvged.rds"))
+write.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/SCEs/cluster"
+read.path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/SCEs/norm/hvg"
+
+tmp <- readRDS(file.path(read.path,"plate_rna_hvged.rds"))
+tmp <- tmp[tmp$norm_method %in% c("sctransform","sctransform_poi"),]
 
 #scran methods with k=2,5,10,,30 , use the one with cluster number closest to real value.
 #fast-greedy, louvain, walktrap
@@ -94,7 +96,7 @@ sc3_svm <-function(sce){
 library(RaceID)
 RaceID <- function(sce){
   real_num <- length(unique(na.omit(sce$group)))
-  sc <- SCseq(as.data.frame(as.matrix(logcounts(sce))))
+  sc <- SCseq(as.data.frame(as.matrix(counts(sce))))
   sc <- filterdata(sc, mintotal=1, minexpr = 1, minnumber = 1,
                    LBatch = NULL, knn = 10, CGenes = NULL, FGenes = NULL, ccor = 0.4,
                    bmode = "RaceID")
@@ -121,8 +123,14 @@ cluster_method <- list(
   RaceID=RaceID
 )
 
-plate_mixture_hvged %>% apply_methods(cluster_method) ->result2
-saveRDS(result2,file.path(write.path,"plate_mixture.rds"))
+tmp %>% select(-hivar_method) %>% arrange(design,data,norm_method) %>% apply_methods(cluster_method) ->result2
+
+
+#combine sctransform results to the old version
+
+#remove cellmix in both sce and seu
+
+saveRDS(result2,file.path(write.path,"plate_rnamix_sctransform.rds"))
 ###evaluation
 library(mclust)
 ARI_matric = function(sce){
@@ -203,4 +211,4 @@ clustering_evaluation <- list(
 )
 
 result3 <- result2 %>% apply_methods(clustering_evaluation)
-saveRDS(result3,file.path(write.path,"plate_mixture_evals.rds"))
+saveRDS(result3,file.path(write.path,"plate_rna_evals_sctransform.rds"))

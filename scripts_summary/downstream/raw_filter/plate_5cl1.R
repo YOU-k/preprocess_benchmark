@@ -544,6 +544,8 @@ calculate_cor <- function(pp){
 
 cors <- data.frame(preprocess = rep(names(counts_all),each=length(allbc)),
                    correlation = calculate_cor(1))
+
+cors %>% group_by(preprocess) %>% summarise(mean=mean(na.omit(correlation)))
 ## 1 above was to specify scpipe
 pdf("results/raw/plate_5cl1/correlation.pdf",width = 5,height = 3.5)
 ggplot(cors[!cors$preprocess=="scPipe",]) + geom_boxplot(aes(x=reorder(preprocess, -correlation),y=correlation,color=preprocess)) +
@@ -600,3 +602,30 @@ ggplot(data=filter.d,aes(x=preprocess,y=detected)) +
   #scale_fill_manual(values = mycol)+
   theme_bw() + labs(x="",y="Number of detected genes per cell",fill="preprocess")
 dev.off()
+
+
+
+
+#kb compared to scpipe
+identical(colnames(sc1),colnames(kb_sc1))
+data.frame(total_counts=sc1$total,
+           detetced_g = sc1$detected,
+           bc=colnames(sc1)) -> scpipe_info
+data.frame(total_countsk=kb_sc1$total,
+           detetced_gk = kb_sc1$detected,
+           bc=colnames(kb_sc1),
+           keep=kb_sc1$keep) -> kb_info
+full_join(kb_info,scpipe_info) -> p
+pdf("../plots_added/plate_5cl1_kb_scpipe_total.pdf",width=4,height = 3)
+ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(total_counts),y=log10(total_countsk),col=keep)) +theme_bw() +
+  scale_color_brewer(palette = "Paired") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title="Total counts per cell",col="Kept in kb")
+dev.off()
+
+pdf("../plots_added/plate_5cl1_kb_scpipe_gene.pdf",width=4,height = 3)
+ggplot(p[!is.na(p$detetced_gk),]) + geom_point(aes(x=log10(detetced_g),y=log10(detetced_gk),col=keep)) +theme_bw() +
+  scale_color_brewer(palette = "Paired") +
+  labs(x="log10(scPipe)",y="log10(kallisto butsools)",title="Number of detected genes per cell",col="Kept in kb")
+dev.off()
+
+

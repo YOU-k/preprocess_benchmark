@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --qos=regular_partitiontimelimit
+#SBATCH --time=90:00:00
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=600G
+#SBATCH --mail-user=you.y@wehi.edu.au
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+
+project="pbmc5k"
+tool_p="/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/tools/zUMIs"
+work_p="/stornext/HPCScratch/home/you.y/preprocess_update/raw_results/zumis"
+cd $work_p
+cd $project
+module load samtools
+module load R/4.0.3
+module load STAR/2.6.1c
+module load pigz
+
+$tool_p/zUMIs.sh -y zUMIs.yaml
+

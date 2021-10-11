@@ -4,9 +4,9 @@ library(CellBench)
 library(R.utils)
 library(tidyverse)
 
-setwd("/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new")
+setwd("/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/")
 data.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data"
-write.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/SCE/raw"
+write.path <- "/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/raw/droplet_based/"
 
 barcode_info <- read.csv("/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/mouse/annotations_droplet.csv",header = TRUE)
 barcode_info[which(barcode_info$channel=="10X_P7_9"),] -> barcode_info
@@ -14,9 +14,9 @@ barcode_info$barcode <- gsub("^.*_", "", unlist(barcode_info$cell))
 barcode_info %>% dplyr::select(barcode, cell_ontology_class) -> barcode_info
 barcode_info$SNG.1ST <- barcode_info$cell_ontology_class
 
-empty.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/SCE/empty"
 
 library(AnnotationHub)
+
 ah <- AnnotationHub()
 EnsDb.Mus.v99 <- query(ah, c("EnsDb", "Mus musculus", 99))[[1]]
 
@@ -78,258 +78,59 @@ scater_filter <- function(sce){
   return(f)
 }
 
-plotpath <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/new/results/raw/"
-library(edgeR)
-plotfc <- function(sce, name){
-  keep <- sce$keep
-  lost <- calculateAverage(counts(sce)[, !keep])
-  kept <- calculateAverage(counts(sce)[, keep])
-  logged <- cpm(cbind(lost, kept), log = TRUE, prior.count = 2)
-  
-  logFC <- logged[, 1] - logged[, 2]
-  logfc_symbol <- rowData(sce)$symbol
-  abundance <- rowMeans(logged)
-  
-  mito_set <- rowData(sce)$symbol[which(rowData(sce)$CHR == "MT")]
-  ribo_set <- rowData(sce)$symbol[grep("^Rp(s|l)", rowData(sce)$symbol)]
-  
-  is_mito <- rowData(sce)$symbol %in% mito_set
-  is_ribo <- rowData(sce)$symbol %in% ribo_set
-  png(paste0(plotpath,name,".png"))
-  
-  plot(
-    abundance,
-    logFC,
-    xlab = "Average count",
-    ylab = "Log-FC (lost/kept)",
-    pch = 16)
-  points(
-    abundance[is_mito],
-    logFC[is_mito],
-    col = "dodgerblue",
-    pch = 16,
-    cex = 1)
-  points(
-    abundance[is_ribo],
-    logFC[is_ribo],
-    col = "orange",
-    pch = 16,
-    cex = 1)
-  abline(h = c(-1, 1), col = "red", lty = 2)
-  
-  dev.off()
-  
-  text = data.frame(gene_id=names(logFC[(c(order(logFC)[1:20],order(logFC)[(length(logFC)-20):length(logFC)]))]),
-                    symbol = logfc_symbol[(c(order(logFC)[1:20],order(logFC)[(length(logFC)-20):length(logFC)]))]
-  )
-  
-  write.table(text,paste0(plotpath,name,".txt"),quote = FALSE,row.names = FALSE,sep="\t")
-  
-}
-
-
-
-plotfclabel <- function(sce, name){
-  sce <- sce[,sce$keep]
-  keep <- sce$no_label
-  lost <- calculateAverage(counts(sce)[, !keep])
-  kept <- calculateAverage(counts(sce)[, keep])
-  logged <- cpm(cbind(lost, kept), log = TRUE, prior.count = 2)
-  
-  logFC <- logged[, 1] - logged[, 2]
-  logfc_symbol <- rowData(sce)$symbol
-  abundance <- rowMeans(logged)
-  
-  mito_set <- rowData(sce)$symbol[which(rowData(sce)$CHR == "MT")]
-  ribo_set <- rowData(sce)$symbol[grep("^Rp(s|l)", rowData(sce)$symbol)]
-  
-  is_mito <- rowData(sce)$symbol %in% mito_set
-  is_ribo <- rowData(sce)$symbol %in% ribo_set
-  png(paste0(plotpath,name,"_label.png"))
-  
-  plot(
-    abundance,
-    logFC,
-    xlab = "Average count",
-    ylab = "Log-FC (lost/kept)",
-    pch = 16)
-  points(
-    abundance[is_mito],
-    logFC[is_mito],
-    col = "dodgerblue",
-    pch = 16,
-    cex = 1)
-  points(
-    abundance[is_ribo],
-    logFC[is_ribo],
-    col = "orange",
-    pch = 16,
-    cex = 1)
-  abline(h = c(-1, 1), col = "red", lty = 2)
-  
-  dev.off()
-  
-  text = data.frame(gene_id=names(logFC[(c(order(logFC)[1:20],order(logFC)[(length(logFC)-20):length(logFC)]))]),
-                    symbol = logfc_symbol[(c(order(logFC)[1:20],order(logFC)[(length(logFC)-20):length(logFC)]))]
-  )
-  
-  write.table(text,paste0(plotpath,name,"_label.txt"),quote = FALSE,row.names = FALSE,sep="\t")
-  
-}
-
 
 ##scpipe 
 
 library(scPipe)
-sc1_p <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/scpipe/mus2_2/"
+sc1_p <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/scpipe/mus2_2"
 sc1 <- create_sce_by_dir(sc1_p, organism = "mmusculus_gene_ensembl", gene_id_type="ensembl_gene_id")
 sc1_barcode <- read.csv("/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/scpipe/mus2_2/barcode_anno.csv",header = TRUE)
 colData(sc1) = cbind(colData(sc1), barcode=sc1_barcode$barcode_sequence)
 
 colnames(sc1) <- sc1$barcode
-
-sc_empty <- readRDS(file.path(empty.path,"scpipe_mus2_emptied.rds"))
-sc1 <- sc1[,which(sc_empty$FDR<=0.001)]
+sc1 <- sc1[,defaultDrops(counts(sc1))]
 calculateQCMet(sc1) ->sc1
 sc1$SNG.1ST <- barcode_info$cell_ontology_class[match(sc1$barcode, barcode_info$barcode)]
-#zero
 sc1 <- sc1[rowSums(counts(sc1))>0,]
-data.frame(total_counts_per_gene =log10(rowSums(counts(sc1))) ,
-           pct.zeros= rowSums(counts(sc1)==0)/ncol(sc1),
-           preprocess="scPipe") -> zero.d.scpipe
-
-#biotype
-library(tidyverse)
-as.data.frame(rowData(sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="scPipe") ->gene_biotype_scpipe
-
-
-#filter by remove outlier
-sc2_p <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/scpipe/mus2/"
-sc2 <- create_sce_by_dir(sc2_p, organism = "mmusculus_gene_ensembl", gene_id_type="ensembl_gene_id")
-sc2_barcode <- read.csv("/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/scpipe/mus2/barcode_anno.csv",header = TRUE)
-colData(sc2) = cbind(colData(sc2), barcode=sc2_barcode$barcode_sequence)
-
-sc2 <- calculate_QC_metrics(sc2)
-calculateQCMet(sc2) ->sc2
-scp_sc1_qc <- detect_outlier(sc2, type= "low", comp=2)
-table(QC_metrics(scp_sc1_qc)$outliers)
-
-
-scp_sc1_qc$keep <- FALSE
-scp_sc1_qc$keep[scp_sc1_qc$outliers=="FALSE"] <- TRUE
-scp_sc1_qc$SNG.1ST <- barcode_info$cell_ontology_class[match(scp_sc1_qc$barcode, barcode_info$barcode)]
-scp_sc1_qc$no_label <- !is.na(scp_sc1_qc$SNG.1ST)
-#plotfc(scp_sc1_qc,"mus2/fc/scpipe_rmout_fc")
-data.frame(total_counts_per_cell = log10(scp_sc1_qc$total),
-           kept = scp_sc1_qc$keep,
-           label=scp_sc1_qc$no_label,
-           Mito_percent_per_cell= scp_sc1_qc$subsets_Mito_percent,
-           detected = scp_sc1_qc$detected,
-           preprocess="scPipe_rm") -> filter.scpipe.rm
-
-
-
-#use scater
-scater_filter(sc1) -> sc1_f
-table(sc1_f)
+sc1_f<- scater_filter(sc1)
 sc1$keep <-sc1_f
+gene_filter(sc1[,sc1$keep])-> sc11
 
-
-
-#all cells kept by scater
-#plotfc(sc1,"mus2/fc/scpipe_scater_fc")
-sc1$no_label <- !is.na(sc1$SNG.1ST)
-#plotfclabel(sc1,"mus2/fc/scpipe_fc_label")
-
-data.frame(total_counts_per_cell = log10(sc1$total),
-           kept = sc1$keep,
-           label=sc1$no_label,
-           Mito_percent_per_cell= sc1$subsets_Mito_percent,
-           detected = sc1$detected,
-           preprocess="scPipe") -> filter.scpipe
-
-saveRDS(gene_filter(sc1[,sc1$keep]),file.path(write.path,"mus2_scpipe.rds"))
+saveRDS(sc11,file.path(write.path,"mus2_scpipe.rds"))
 
 #zumis
 
 library(SingleCellExperiment)
-zumis_path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis2/mus2/zUMIs_output/expression"
-zumis_sc1_data <- readRDS(file.path(zumis_path,"mouse_lung2.dgecounts.rds"))
+zumis_path <- "/stornext/HPCScratch/home/you.y/preprocess_update/raw_results/zumis/mus2/zUMIs_output/expression/"
+zumis_sc1_data <- readRDS(file.path(zumis_path,"mus2.dgecounts.rds"))
 
 zumis_sc1 <- SingleCellExperiment(
   assays = list(counts = zumis_sc1_data$umicount$inex$all)
 )
 
-zumis_empty <- readRDS(file.path(empty.path,"zumis_mus2_emptied.rds"))
-zumis_sc1 <- zumis_sc1[,which(zumis_empty$FDR<=0.001)]
+zumis_sc1 <- zumis_sc1[,defaultDrops(counts(zumis_sc1))]
 zumis_sc1$SNG.1ST <- barcode_info$cell_ontology_class[match(colnames(zumis_sc1), barcode_info$barcode)]
 
 zumis_sc1 <- zumis_sc1[rowSums(counts(zumis_sc1))>0,]
-data.frame(total_counts_per_gene =log10(rowSums(counts(zumis_sc1))) ,
-           pct.zeros= rowSums(counts(zumis_sc1)==0)/ncol(zumis_sc1),
-           preprocess="zUMIs") -> zero.d.zumis
 calculateQCMet(zumis_sc1) ->zumis_sc1
-
 
 zumis_f<- scater_filter(zumis_sc1)
 
-as.data.frame(rowData(zumis_sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="zUMIs") ->gene_biotype_zumis
-
-
 zumis_sc1$keep <-zumis_f
-zumis_sc1$no_label <- !is.na(zumis_sc1$SNG.1ST)
-data.frame(total_counts_per_cell = log10(zumis_sc1$total),
-           kept = zumis_sc1$keep,
-           label=zumis_sc1$no_label,
-           Mito_percent_per_cell= zumis_sc1$subsets_Mito_percent,
-           detected = zumis_sc1$detected,
-           preprocess="zUMIs") -> filter.zumis
+gene_filter(zumis_sc1[,zumis_sc1$keep])-> zumis_sc11
 
-#plotfc(zumis_sc1,"mus2/fc/zumis_scater_fc")
-plotfclabel(zumis_sc1,"mus2/fc/zumis_fc_label")
-
-#automatic
-zumis_path2 <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis/mouse/mus2/zUMIs_output/expression"
-zumis_sc2_data <- readRDS(file.path(zumis_path2,"mouse_lung2.dgecounts.rds"))
-
-zumis_sc2 <- SingleCellExperiment(
-  assays = list(counts = zumis_sc2_data$umicount$inex$all)
-)
-
-zumis_sc2 <- zumis_sc2[rowSums(counts(zumis_sc2))>0,]
-
-calculateQCMet(zumis_sc2) ->zumis_sc2
-
-zumis_f2<- scater_filter(zumis_sc2)
-zumis_sc2$SNG.1ST <- barcode_info$cell_ontology_class[match(colnames(zumis_sc2), barcode_info$barcode)]
-zumis_sc2$keep <-zumis_f2
-#plotfc(zumis_sc1,"mus2/fc/zumis_auto_scater_fc")
-
-zumis_sc2$no_label <- !is.na(zumis_sc2$SNG.1ST)
-
-data.frame(total_counts_per_cell = log10(zumis_sc2$total),
-           kept = zumis_sc2$keep,
-           label= zumis_sc2$no_label,
-           Mito_percent_per_cell= zumis_sc2$subsets_Mito_percent,
-           detected = zumis_sc2$detected,
-           preprocess="zUMIs_auto") -> filter.zumis.auto
-
-saveRDS(gene_filter(zumis_sc1[,zumis_sc1$keep]),file.path(write.path,"mus2_zumis.rds"))
-
-
+saveRDS(zumis_sc11,file.path(write.path,"mus2_zumis.rds"))
 
 #kallisto 
 
 library(Matrix)
-
-kb_empty <- readRDS(file.path(empty.path,"kb_mus2_emptied.rds"))
 kb_path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/kallisto_bus/mus2/genecount/"
 kb_mat <- t(readMM(file=file.path(kb_path,"genes.mtx")))
 kb_well <- read.table(file.path(kb_path,"genes.barcodes.txt"))
 kb_genes <- read.table(file.path(kb_path,"genes.genes.txt"))
 rownames(kb_mat) <- kb_genes[,1]
 colnames(kb_mat) <- kb_well[,1]
-kb_mat <- kb_mat[,which(kb_empty$FDR<=0.001)]
+kb_mat <- kb_mat[,defaultDrops(kb_mat)]
 
 kb_sc1 <- SingleCellExperiment(
   assays = list(counts = as.matrix(kb_mat))
@@ -342,29 +143,14 @@ calculateQCMet(kb_sc1) ->kb_sc1
 
 kb_sc1$SNG.1ST <- barcode_info$cell_ontology_class[match(colnames(kb_sc1), barcode_info$barcode)]
 
-data.frame(total_counts_per_gene =log10(rowSums(counts(kb_sc1))) ,
-           pct.zeros= rowSums(counts(kb_sc1)==0)/ncol(kb_sc1),
-           preprocess="kallisto bustools") -> zero.d.kb
-
 kb_sc1 <- kb_sc1[rowSums(counts(kb_sc1))>0,]
 
-as.data.frame(rowData(kb_sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="kallisto bustools") ->gene_biotype_kb
 
 kb_f<- scater_filter(kb_sc1)
 kb_sc1$keep <-kb_f
-kb_sc1 <- kb_sc1[rowSums(counts(kb_sc1))>0,]
-#plotfc(kb_sc1,"mus2/fc/kb_scater_fc")
+gene_filter(kb_sc1[,kb_sc1$keep])-> kb_sc11
 
-kb_sc1$no_label <- !is.na(kb_sc1$SNG.1ST)
-plotfclabel(kb_sc1,"mus2/fc/kb_fc")
-data.frame(total_counts_per_cell = log10(kb_sc1$total),
-           kept = kb_sc1$keep,
-           label = kb_sc1$no_label,
-           Mito_percent_per_cell= kb_sc1$subsets_Mito_percent,
-           detected = kb_sc1$detected,
-           preprocess="kallisto bustools") -> filter.kb
-
-saveRDS(gene_filter(kb_sc1[,kb_sc1$keep]),file.path(write.path,"mus2_kb.rds"))
+saveRDS(kb_sc11,file.path(write.path,"mus2_kb.rds"))
 
 
 
@@ -372,11 +158,10 @@ saveRDS(gene_filter(kb_sc1[,kb_sc1$keep]),file.path(write.path,"mus2_kb.rds"))
 #salmon_alevin 
 
 library(fishpond)
-alevin_empty <- readRDS(file.path(empty.path,"alevin_mouse2.rds"))
 library(tximport)
-sal_ale_path<-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/sal_ale/mouse/mus2/alevin_output/alevin/"
+sal_ale_path<-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/raw_results/SA/mus2/output/alevin/"
 alevin <- tximport(file.path(sal_ale_path,"quants_mat.gz"),type="alevin")
-alevin_filtered  <- alevin$counts[,which(alevin_empty$FDR<=0.001)]
+alevin_filtered  <- alevin$counts[,defaultDrops(alevin$counts)]
 
 alevin_sc <- SingleCellExperiment(
   assays = list(counts = as.matrix(alevin_filtered))
@@ -386,31 +171,32 @@ barcode_info$SNG.1ST[match(colnames(alevin_sc), barcode_info$barcode)]-> alevin_
 
 calculateQCMet(alevin_sc) ->alevin_sc
 alevin_sc <- alevin_sc[rowSums(counts(alevin_sc))>0,]
-#alevin_sc <- alevin_sc[,alevin_sc$total >100,]
-data.frame(total_counts_per_gene =log10(rowSums(counts(alevin_sc))) ,
-           pct.zeros= rowSums(counts(alevin_sc)==0)/ncol(alevin_sc),
-           preprocess="salmon alevin") -> zero.d.alevin
-
-alevin_sc$no_label <- !is.na(alevin_sc$SNG.1ST)
-
-as.data.frame(rowData(alevin_sc)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="salmon alevin") ->gene_biotype_alevin
-
 
 alevin_f<- scater_filter(alevin_sc)
-#alevin_sc <- alevin_sc[rowSums(counts(alevin_sc))>0,]
 
 alevin_sc$keep <-alevin_f
-#plotfc(alevin_sc,"mus2/fc/alevin_scater_fc")
-plotfclabel(alevin_sc,"mus2/fc/alevin_fc")
+gene_filter(alevin_sc[,alevin_sc$keep])-> alevin_sc1
 
-data.frame(total_counts_per_cell = log10(alevin_sc$total),
-           kept = alevin_sc$keep,
-           label = alevin_sc$no_label,
-           Mito_percent_per_cell= alevin_sc$subsets_Mito_percent,
-           detected = alevin_sc$detected,
-           preprocess="salmon alevin") -> filter.alevin
 
-saveRDS(gene_filter(alevin_sc[,alevin_sc$keep]),file.path(write.path,"mus2_alevin.rds"))
+saveRDS(alevin_sc1,file.path(write.path,"mus2_sa.rds"))
+
+
+#splici
+source("/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/raw_results/splici/load_fry.R")
+splici_path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/tools/salmon/quants/mus2/quant/"
+af = load_fry(splici_path)
+af <- af[,defaultDrops(counts(af))]
+barcode_info$cell_ontology_class[match(colnames(af), barcode_info$barcode)]-> af$SNG.1ST
+
+calculateQCMet(af) ->af
+af <- af[rowSums(counts(af))>0,]
+af_f<- scater_filter(af)
+
+af$keep <-af_f
+
+gene_filter(af[,af$keep])-> af1
+saveRDS(af1,file.path(write.path,"mus2_splici.rds"))
+
 
 #dropseqpipe
 
@@ -428,9 +214,8 @@ drop_genes <- mapIds(
 names(drop_genes) <- NULL
 rownames(drop_mat) <- drop_genes
 colnames(drop_mat) <- as.character(drop_well[,1])
-drop_empty <- readRDS(file.path(empty.path,"dropseqpipe_mus2_emptied.rds"))
 
-drop_mat <- drop_mat[,which(drop_empty$FDR<=0.001)]
+drop_mat <- drop_mat[,defaultDrops(drop_mat)]
 drop_sc1<- SingleCellExperiment(
   assays = list(counts = as.matrix(drop_mat))
 )
@@ -440,102 +225,96 @@ barcode_info$cell_ontology_class[match(colnames(drop_sc1), barcode_info$barcode)
 
 calculateQCMet(drop_sc1) ->drop_sc1
 
-data.frame(total_counts_per_gene =log10(rowSums(counts(drop_sc1))) ,
-           pct.zeros= rowSums(counts(drop_sc1)==0)/ncol(drop_sc1),
-           preprocess="dropSeqPipe") -> zero.d.drop
-
-drop_sc1$no_label <- !is.na(drop_sc1$SNG.1ST)
 drop_sc1 <- drop_sc1[rowSums(counts(drop_sc1))>0,]
-as.data.frame(rowData(drop_sc1)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="dropSeqPipe") ->gene_biotype_drop
-
-
 drop_f<- scater_filter(drop_sc1)
 
 drop_sc1$keep <-drop_f
-#plotfc(drop_sc1,"mus2/fc/drop_scater_fc")
-plotfclabel(drop_sc1,"mus2/fc/drop_fc")
+gene_filter(drop_sc1[,drop_sc1$keep])-> drop_sc11
 
-data.frame(total_counts_per_cell = log10(drop_sc1$total),
-           kept = drop_sc1$keep,
-           label = drop_sc1$no_label,
-           Mito_percent_per_cell= drop_sc1$subsets_Mito_percent,
-           detected = drop_sc1$detected,
-           preprocess="dropSeqPipe") -> filter.drop
-saveRDS(gene_filter(drop_sc1[,drop_sc1$keep]),file.path(write.path,"mus2_drop.rds"))
-
+saveRDS(drop_sc11,file.path(write.path,"mus2_drop.rds"))
 
 
 #cellranger
-library(DropletUtils)
-cellranger_empty <- readRDS(file.path(empty.path,"cellranger_mouse2_emptied.rds"))
-cellr_path <-"/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/cellranger/mus2/bamtofastq/outs/raw_feature_bc_matrix/"
+cellr_path <-"/stornext/HPCScratch/home/you.y/preprocess_update/raw_results/cellranger/mus2/bamtofastq/outs/raw_feature_bc_matrix/"
 cellrangr_sc <- read10xCounts(cellr_path,col.names=TRUE)
 colnames(cellrangr_sc)<-sapply(strsplit(colnames(cellrangr_sc),"-"),"[[",1)
-cellrangr_sc <- cellrangr_sc[,which(cellranger_empty$FDR<=0.001)]
+cellrangr_sc <- cellrangr_sc[,defaultDrops(counts(cellrangr_sc))]
 
 barcode_info$cell_ontology_class[match(colnames(cellrangr_sc), barcode_info$barcode)]-> cellrangr_sc$SNG.1ST
 
 
 calculateQCMet(cellrangr_sc) ->cellrangr_sc
 
-data.frame(total_counts_per_gene =log10(rowSums(counts(cellrangr_sc))) ,
-           pct.zeros= rowSums(counts(cellrangr_sc)==0)/ncol(cellrangr_sc),
-           preprocess="Cell Ranger") -> zero.d.cellranger
-
-cellrangr_sc$no_label <- !is.na(cellrangr_sc$SNG.1ST)
 cellrangr_sc <- cellrangr_sc[rowSums(counts(cellrangr_sc))>0,]
-as.data.frame(rowData(cellrangr_sc)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="Cell Ranger") ->gene_biotype_cellranger
-
-
 cellrangr_f<- scater_filter(cellrangr_sc)
 
 cellrangr_sc$keep <-cellrangr_f
-#plotfc(cellrangr_sc,"mus2/fc/cellranger_scater_fc")
+gene_filter(cellrangr_sc[,cellrangr_sc$keep])-> cellrangr_sc1
 
-plotfclabel(cellrangr_sc,"mus2/fc/cellranger_fc")
 
-data.frame(total_counts_per_cell = log10(cellrangr_sc$total),
-           kept = cellrangr_sc$keep,
-           label = cellrangr_sc$no_label,
-           Mito_percent_per_cell= cellrangr_sc$subsets_Mito_percent,
-           detected = cellrangr_sc$detected,
-           preprocess="Cell Ranger") -> filter.cellranger
-
-saveRDS(gene_filter(cellrangr_sc[,cellrangr_sc$keep]),file.path(write.path,"mus2_cellranger.rds"))
-
+saveRDS(cellrangr_sc1,file.path(write.path,"mus2_cellranger.rds"))
 #optimus
-optimus_path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/optimus/mus2/"
-readRDS(file.path(optimus_path,"optimus.rds"))->optimus_sc
-barcode_info$cell_ontology_class[match(colnames(optimus_sc), barcode_info$barcode)]-> optimus_sc$SNG.1ST
+optimus_path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/raw_results/optimus/mus2/"
+library(reticulate)
+np <- import("numpy")
+col <- np$load(file.path(optimus_path,"sparse_counts_col_index.npy"))
+row <- np$load(file.path(optimus_path,"sparse_counts_row_index.npy"))
+t(readMM(file.path(optimus_path,"mmatrix.mtx")))->mm
+defaultDrops(mm)->dm
+mm <- mm[,defaultDrops(mm)]
+optimus_sce <- SingleCellExperiment(
+  assays = list(counts=as.matrix(mm)))
+rownames(optimus_sce)<- col
+colnames(optimus_sce) <- row[dm]
 
-calculateQCMet(optimus_sc) ->optimus_sc
+barcode_info$cell_ontology_class[match(colnames(optimus_sce), barcode_info$barcode)]-> optimus_sce$SNG.1ST
 
-data.frame(total_counts_per_gene =log10(rowSums(counts(optimus_sc))) ,
-           pct.zeros= rowSums(counts(optimus_sc)==0)/ncol(optimus_sc),
-           preprocess="Optimus") -> zero.d.optimus
-
-optimus_sc$no_label <- !is.na(optimus_sc$SNG.1ST)
-optimus_sc <- optimus_sc[rowSums(counts(optimus_sc))>0,]
-as.data.frame(rowData(optimus_sc)) %>% dplyr::group_by(gene_biotype) %>% summarise(count=n()) %>% mutate(preprocess="Optimus") ->gene_biotype_optimus
+calculateQCMet(optimus_sce) ->optimus_sce
 
 
-optimus_f<- scater_filter(optimus_sc)
+optimus_sce <- optimus_sce[rowSums(counts(optimus_sce))>0,]
 
-optimus_sc$keep <-optimus_f
-#plotfc(optimus_sc,"mus2/fc/optimus_scater_fc")
-plotfclabel(optimus_sc,"mus2/fc/optimus_fc")
 
-data.frame(total_counts_per_cell = log10(optimus_sc$total),
-           kept = optimus_sc$keep,
-           label = optimus_sc$no_label,
-           Mito_percent_per_cell= optimus_sc$subsets_Mito_percent,
-           detected = optimus_sc$detected,
-           preprocess="Optimus") -> filter.optimus
+optimus_f<- scater_filter(optimus_sce)
 
-saveRDS(gene_filter(optimus_sc[,optimus_sc$keep]),file.path(write.path,"mus2_optimus.rds"))
+optimus_sce$keep <-optimus_f
 
+gene_filter(optimus_sce[,optimus_sce$keep])-> optimus_sce1
+
+saveRDS(optimus_sce1,file.path(write.path,"mus2_optimus.rds"))
 
 
 
+
+
+
+###all together
+
+bind_rows(data.frame(data="scpipe",total=sc11$total,detect=sc11$detected, label=sc11$SNG.1ST), 
+          data.frame(data="zumis",total=zumis_sc11$total,detect=zumis_sc11$detected,label=zumis_sc11$SNG.1ST),
+          data.frame(data="drop",total=drop_sc11$total,detect=drop_sc11$detected,label=drop_sc11$SNG.1ST),
+          data.frame(data="cellranger",total=cellrangr_sc1$total,detect=cellrangr_sc1$detected,label=cellrangr_sc1$SNG.1ST),
+          data.frame(data="splici",total=af1$total,detect=af1$detected,label=af1$SNG.1ST),
+          data.frame(data="optimus",total=optimus_sce1$total,detect=optimus_sce1$detected,label=optimus_sce1$SNG.1ST),
+          data.frame(data="sa",total=alevin_sc1$total,detect=alevin_sc1$detected,label=alevin_sc1$SNG.1ST),
+          data.frame(data="kb",total=kb_sc11$total,detect=kb_sc11$detected,label=kb_sc11$SNG.1ST)) -> tmp
+
+tmp$data <- recode(tmp$data , "scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools",
+                   "optimus" ="Optimus","drop"="dropSeqPipe","cellranger"="Cell Ranger",
+                   "sa"="salmon_SA","splici"="salmon_splici")
+
+tmp$log10total <- log10(tmp$total)
+tmp$log10detect <- log10(tmp$detect)
+ggplot(tmp,aes(x=data,y=log10total,col=data)) +geom_violin() 
+tmp$labelled <- !is.na(tmp$label)
+col=c("lightblue","darkblue")
+names(col) <- c(TRUE,FALSE)
+ggplot(tmp) +
+  geom_violin(aes(x=data,y=log10detect,col=data)) +
+  geom_jitter(aes(x=data,y=log10detect,col=labelled),alpha=0.2)+
+  scale_color_manual(values=c(droplet_col,col))+
+  theme_bw()
+ggviolin(tmp, x = "data", y = "log10detect", fill = "white",col="data",
+         palette = c(droplet_col,col), legend="right" ,add = "jitter", add.params = list(color = "labelled",alpha=0.2))
 
 

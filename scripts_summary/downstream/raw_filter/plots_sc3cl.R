@@ -24,8 +24,8 @@ dev.off()
 
 
 #total counts density
-pdf("results/raw/sc_3cl/total_counts_density.pdf",width = 5,height = 4)
-ggplot(zero.d) +geom_density(aes(x=total_counts_per_gene,color=preprocess),adjust = 1.2,size=1.1) +scale_color_manual(values = mycol) +
+pdf("results/raw/sc_3cl/total_counts_density_above0.pdf",width = 5,height = 4)
+ggplot(sc3cl_zero[sc3cl_zero$total_counts_per_gene>0,]) +geom_density(aes(x=total_counts_per_gene,color=preprocess),adjust = 0.8,size=1.1) +scale_color_manual(values = mycol) +
   theme(text = element_text(size=20)) +theme_bw()
 dev.off()
 

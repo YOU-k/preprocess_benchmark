@@ -1,22 +1,52 @@
-project: scbench_5cellline_10x
+###########################################
+#Welcome to zUMIs
+#below, please fill the mandatory inputs
+#We expect full paths for all files.
+###########################################
+
+#define a project name that will be used to name output files
+project: sc_5clv3
+
+#Sequencing File Inputs:
+#For each input file, make one list object & define path and barcode ranges
+#base definition vocabulary: BC(n) UMI(n) cDNA(n).
+#Barcode range definition needs to account for all ranges. You can give several comma-separated ranges for BC & UMI sequences, eg. BC(1-6,20-26)
+#you can specify between 1 and 4 input files
 sequence_files:
-  file1:
-    name: /stornext/General/data/user_managed/grpu_mritchie_1/SCmixologyV3/luyiT_10X_260319/H2YJLBGXB/outs/fastq_path/H2YJLBGXB/Lib90_combined_S1_L001_R1.fastq.gz
+  file1: 
+    name: /stornext/General/data/user_managed/grpu_mritchie_1/SCmixologyV3/luyiT_10X_260319/H2YJLBGXB/outs/fastq_path/H2YJLBGXB/Lib90_combined/Lib90_combined_S1_L001_R1_001.fastq.gz
     base_definition: 
      - BC(1-16)
      - UMI(17-28)
   file2:
-    name: /stornext/General/data/user_managed/grpu_mritchie_1/SCmixologyV3/luyiT_10X_260319/H2YJLBGXB/outs/fastq_path/H2YJLBGXB/Lib90_combined_S1_L001_R2.fastq.gz
+    name: /stornext/General/data/user_managed/grpu_mritchie_1/SCmixologyV3/luyiT_10X_260319/H2YJLBGXB/outs/fastq_path/H2YJLBGXB/Lib90_combined/Lib90_combined_S1_L001_R2_001.fastq.gz
     base_definition: 
      - cDNA(1-91)
+
+
+#reference genome setup
 reference:
-  STAR_index: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis/homo_star_idx
-  GTF_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/homo_ercc_more.gtf
-  additional_STAR_params: ''
-  additional_files: ~
-out_dir: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/zumis2/sc_5cl_v3
-num_threads: 8
-mem_limit: null
+  STAR_index: /stornext/HPCScratch/home/you.y/preprocess_update/raw_results/zumis/human_star_idx/
+  GTF_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/Homo_sapiens.GRCh38.98.gtf
+  exon_extension: no #extend exons by a certain width?
+  extension_length: 0 #number of bp to extend exons by
+  scaffold_length_min: 0 #minimal scaffold/chromosome length to consider (0 = all)
+  additional_files: null
+  additional_STAR_params: null 
+#output directory
+out_dir: /stornext/HPCScratch/home/you.y/preprocess_update/raw_results/zumis/sc_5clv3v2
+
+###########################################
+#below, you may optionally change default parameters
+###########################################
+
+#number of processors to use
+num_threads: 64
+mem_limit: null #Memory limit in Gigabytes, null meaning unlimited RAM usage.
+
+#barcode & UMI filtering options
+#number of bases under the base quality cutoff that should be filtered out.
+#Phred score base-cutoff for quality control.
 filter_cutoffs:
   BC_filter:
     num_bases: 1
@@ -24,28 +54,44 @@ filter_cutoffs:
   UMI_filter:
     num_bases: 1
     phred: 20
-barcodes:
-  barcode_num: ~
-  barcode_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/10xv3_whitelist.txt
-  automatic: no
-  BarcodeBinning: 1
-  nReadsperCell: 0
-  demultiplex: no
-counting_opts:
-  introns: yes
-  downsampling: '0'
-  strand: 0
-  Ham_Dist: 0
-  write_ham: no
-  velocyto: no
-  primaryHit: yes
-  twoPass: yes
-make_stats: yes
-which_Stage: Filtering
-Rscript_exec: Rscript
-STAR_exec: STAR
-pigz_exec: pigz
-samtools_exec: samtools
-zUMIs_directory: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/tools/zUMIs
-read_layout: SE
 
+#Options for Barcode handling
+#You can give either number of top barcodes to use or give an annotation of cell barcodes.
+#If you leave both barcode_num and barcode_file empty, zUMIs will perform automatic cell barcode selection for you!
+barcodes:
+  barcode_num: null
+  barcode_file: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess/data/10xv3_whitelist.txt
+  barcode_sharing: null #Optional for combining several barcode sequences per cell (see github wiki)
+  automatic: no #Give yes/no to this option. If the cell barcodes should be detected automatically. If the barcode file is given in combination with automatic barcode detection, the list of given barcodes will be used as whitelist.
+  BarcodeBinning: 1 #Hamming distance binning of close cell barcode sequences.
+  nReadsperCell: 10 #Keep only the cell barcodes with atleast n number of reads.
+  demultiplex: no #produce per-cell demultiplexed bam files.
+
+#Options related to counting of reads towards expression profiles
+counting_opts:
+  introns: yes #can be set to no for exon-only counting.
+  intronProb: no #perform an estimation of how likely intronic reads are to be derived from mRNA by comparing to intergenic counts.
+  downsampling: 0 #Number of reads to downsample to. This value can be a fixed number of reads (e.g. 10000) or a desired range (e.g. 10000-20000) Barcodes with less than <d> will not be reported. 0 means adaptive downsampling. Default: 0.
+  strand: 0 #Is the library stranded? 0 = unstranded, 1 = positively stranded, 2 = negatively stranded
+  Ham_Dist: 1 #Hamming distance collapsing of UMI sequences.
+  velocyto: no #Would you like velocyto to do counting of intron-exon spanning reads
+  primaryHit: yes #Do you want to count the primary Hits of multimapping reads towards gene expression levels?
+  multi_overlap: no #Do you want to assign reads overlapping to multiple features?
+  fraction_overlap: 0 #minimum required fraction of the read overlapping with the gene for read assignment to genes
+  twoPass: yes #perform basic STAR twoPass mapping
+
+#produce stats files and plots?
+make_stats: no
+
+
+#Start zUMIs from stage. Possible TEXT(Filtering, Mapping, Counting, Summarising). Default: Filtering.
+which_Stage: Filtering
+
+#define dependencies program paths
+samtools_exec: samtools #samtools executable
+Rscript_exec: Rscript #Rscript executable
+STAR_exec: STAR #STAR executable
+pigz_exec: pigz #pigz executable
+
+#below, fqfilter will add a read_layout flag defining SE or PE
+zUMIs_directory: /stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/tools/zUMIs

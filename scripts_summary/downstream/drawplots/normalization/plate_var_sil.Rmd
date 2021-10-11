@@ -1,0 +1,194 @@
+```{r}
+methods_colors <- c("#E69F00","#56B4E9" ,"#009E73"  ,"#F0E442", "#0072B2" , "#D55E00" ,"#CC79A7", "#999999" ,"#91D1C2B2")
+mycol=methods_colors
+mycol[8] <- "yellowgreen"
+mycol[10] <- "olivedrab4"
+names(mycol) = c("scPipe","celseq2","scruff","Optimus","dropSeqPipe","zUMIs","Cell Ranger","salmon_SA","kallisto bustools","salmon_splici")
+
+
+barplot(seq(1:10),col=mycol)
+```
+
+
+
+```{r}
+eval.path <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/SCEs/norm/eval/"
+savepath <- "/stornext/General/data/user_managed/grpu_mritchie_1/Yue/preprocess_update/results/plate_based/"
+```
+
+```{r}
+dir(eval.path)
+plate_mixture <- readRDS(file.path(eval.path,"plate_rnamix_eval.rds"))
+plate_mixture %>% spread(norm_evaluation,result) -> plate_mixture_spread
+```
+
+```{r}
+plate_singlecell <- readRDS(file.path(eval.path,"plate_singlecell_eval.rds"))
+plate_singlecell %>% spread(norm_evaluation,result) -> plate_singlecell_spread
+```
+
+
+
+
+```{r}
+plate_mixture_spread$data <- recode(plate_mixture_spread$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs")
+plate_mixture_spread$norm_method <- recode(plate_mixture_spread$norm_method,"sctransform"="sct")
+plate_mixture_spread$norm_method <- recode(plate_mixture_spread$norm_method,"sctransform_poi"="sct_poi")
+plate_mixture_spread<- plate_mixture_spread %>% dplyr::filter(!norm_method=="none")
+#rnamix
+plate_mixture_spread <- plate_mixture_spread[plate_mixture_spread$design=="rnamix",]
+as.numeric(plate_mixture_spread$unwanted_variation_corr) -> plate_mixture_spread$unwanted_variation_corr
+
+with(plate_mixture_spread,reorder(data,unwanted_variation_corr)) -> plate_mixture_spread$data
+with(plate_mixture_spread,reorder(norm_method,unwanted_variation_corr)) -> plate_mixture_spread$norm_method
+
+
+
+pdf(file.path(savepath,"plate_unwantedvar_rnamix.pdf"),width=5.5,height =3)
+plate_mixture_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(unwanted_variation_corr, na.rm=TRUE),digits=1)) %>% ungroup() %>% 
+  group_by(norm_method) %>% 
+  mutate(scaled = (Median - mean(Median))/sd(Median)) %>% 
+  ggplot()+
+  geom_tile(aes(norm_method, data, fill= scaled))+
+  geom_text(aes(norm_method, data, label= Median),color="black",size=3)+ 
+  scale_fill_distiller(palette = "Blues") +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.ticks = element_blank(),
+    text=element_text(size=12))+
+  ggtitle("Explained unwanted variance") +labs(fill="Scaled Median")
+dev.off()
+```
+```{r}
+#plate single cell
+plate_singlecell_spread<- plate_singlecell_spread %>% dplyr::filter(!norm_method=="none")
+plate_singlecell_spread$data <- recode(plate_singlecell_spread$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs")
+
+as.numeric(plate_singlecell_spread$unwanted_variation_corr) -> plate_singlecell_spread$unwanted_variation_corr
+
+with(plate_singlecell_spread,reorder(data,unwanted_variation_corr)) -> plate_singlecell_spread$data
+with(plate_singlecell_spread,reorder(norm_method,unwanted_variation_corr)) -> plate_singlecell_spread$norm_method
+plate_singlecell_spread$norm_method <- recode(plate_singlecell_spread$norm_method,"sctransform"="sct")
+plate_singlecell_spread$norm_method <- recode(plate_singlecell_spread$norm_method,"sctransform_poi"="sct_poi")
+pdf(file.path(savepath,"plate_unwantedvar_singlecell.pdf"),width=5.5,height = 3)
+plate_singlecell_spread %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(unwanted_variation_corr, na.rm=TRUE),digits=1)) %>% ungroup() %>% 
+  group_by(norm_method) %>% 
+  mutate(scaled = (Median - mean(Median))/sd(Median)) %>% 
+  ggplot()+
+  geom_tile(aes(norm_method, data, fill= scaled))+
+  geom_text(aes(norm_method, data, label= Median),color="black",size=3)+ 
+  scale_fill_distiller(palette = "Blues") +labs(fill="Scaled Median")+
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.ticks = element_blank(),
+    text=element_text(size=12))+
+  ggtitle("Explained unwanted variance")
+dev.off()
+```
+
+
+
+
+
+
+```{r}
+
+plate_mixture <- readRDS(file.path(eval.path,"plate_rnamix_eval.rds"))
+plate_mixture %>% spread(norm_evaluation,result) -> plate_mixture_spread
+
+plate_singlecell <- readRDS(file.path(eval.path,"plate_singlecell_eval.rds"))
+plate_singlecell %>% spread(norm_evaluation,result) -> plate_singlecell_spread
+rbind(plate_mixture_spread,plate_singlecell_spread) -> plate_spread
+
+
+
+plate_spread$data <- recode(plate_spread$data,"celseq"="celseq2", "scpipe"="scPipe","zumis"="zUMIs")
+plate_spread$norm_method <- recode(plate_spread$norm_method,"sctransform"="sct")
+plate_spread$norm_method <- recode(plate_spread$norm_method,"sctransform_poi"="sct_poi")
+
+library(CellBench)
+
+plate_spread %>% dplyr::filter(!is.task_error(silhouette)) -> plate_spread
+as.numeric(plate_spread$silhouette) -> plate_spread$silhouette
+
+for (tp in unique(plate_spread$design)){
+  plate_spread[plate_spread$design==tp,]$silhouette = 
+    as.numeric(scale(plate_spread[plate_spread$design==tp,]$silhouette,center=mean(plate_spread[plate_spread$design==tp & plate_spread$norm_method=="none",]$silhouette)))
+}
+plate_spread$design <- recode(plate_spread$design,"plate3cl"="simplemix","plate5cl1"="simplemix",
+                              "plate5cl2"="simplemix","plate5cl3"="simplemix")
+
+plate_spread %>% group_by(design,data,norm_method) %>% summarise(mean=mean(silhouette),sd=sd(silhouette)) -> plate_draw
+plate_draw %>% dplyr::filter(!norm_method=="none")  -> plate_draw
+with(plate_draw,reorder(data,mean)) -> plate_draw$data
+with(plate_draw,reorder(norm_method,mean)) -> plate_draw$norm_method
+
+
+
+pdf(file.path(savepath,"plate_sil.pdf"),height=5,width=6)
+ggplot(data=plate_draw,aes(x=data,y=mean,col=data))+geom_point(data=plate_draw,aes(x=data,y=mean,col=data),size=2)+theme_bw()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0,
+                position=position_dodge(0.05))+
+  facet_grid(norm_method~design) + 
+  coord_flip()+
+  scale_colour_manual(values = mycol[as.character(unique(plate_draw$data))]) +
+  labs(x="",y="Normalized Silhouette widths",col="Preprocessing workflows")+ theme(text=element_text(size=12),
+                                                                                    axis.title.y=element_blank(),
+                                                                                          axis.text.y=element_blank(),
+                                                                                          axis.ticks.y=element_blank())
+dev.off()          
+```
+
+
+
+```{r}
+DE_methods_in = function(res_spread,res_column,met_column){
+  res_method = c()
+  res_coeff = c()
+  res_pval = c()
+  for(i in unique(as.character(res_spread[,met_column]))){
+    res_spread$the_method = "NO"
+    res_spread$the_method[res_spread[,met_column]==i] = "YES"
+    fit = lm(res_spread[,res_column] ~ res_spread$the_method)
+    sm = summary(fit)
+    res_method = c(res_method,i)
+    res_coeff = c(res_coeff,sm$coefficients[2,1])
+    res_pval= c(res_pval,sm$coefficients[2,4])
+  }
+  res_df = data.frame(method=res_method,
+                      coefficient=res_coeff,
+                      p_value=res_pval,
+                      stringsAsFactors = FALSE)
+  return(res_df)
+}
+```
+
+
+```{r}
+DE_methods_in(as.data.frame(plate_spread %>% dplyr::filter(!design=="rnamix")),res_column="silhouette",met_column="data") ->tmp
+tmp
+```
+
+```{r}
+pdf(file.path(savepath,"sil_coefficients.pdf"),height=2.5,width=4.5)
+ggplot(tmp)+
+  geom_col(aes(reorder(method,coefficient),coefficient,fill=method)) +
+  scale_fill_manual(values=mycol[as.character(unique(plate_draw$data))]) +
+  theme(text=element_text(size=12)) +
+  theme_bw()+
+  labs(x="Single Cell line cells",y="Coeffiecient",fill="Preprocessing workflows")
+dev.off()
+```
+

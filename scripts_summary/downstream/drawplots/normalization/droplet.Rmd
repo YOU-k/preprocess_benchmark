@@ -1,0 +1,145 @@
+
+```{r}
+eval.path <- "/stornext/HPCScratch/home/you.y/preprocess_update/SCEs/norm/eval/"
+savepath <- "/stornext/HPCScratch/home/you.y/preprocess_update/results/droplet-based/normalization/"
+```
+
+```{r}
+dir(eval.path)
+designs=c("mus1","mus2","pbmc10k","pbmc5k","sc3cl","sc5cl","sc5clv3")
+sp <- tibble()
+for (d in designs) {
+ tmp <- readRDS(paste0(eval.path,d,"_eval.rds"))
+ tmp %>% spread(norm_evaluation,result) -> tmp_spread
+ bind_rows(tmp_spread,sp) ->sp
+}
+```
+
+
+
+
+```{r}
+sp$data=recode(sp$data, "scpipe"="scPipe","zumis"="zUMIs","kb"="kallisto bustools",
+                "optimus" ="Optimus","drop"="dropSeqPipe","cellranger"="Cell Ranger",
+                "sa"="salmon_SA","splici"="salmon_splici")
+sp$norm_method <- recode(sp$norm_method,"sctransform_poi" ="sct_poi", "sctransform"="sct")
+sp$dt <- sp$design
+sp$dt[grepl("mus",sp$design)] <- "Lung_tissue"
+sp$dt[grepl("pbmc",sp$design)] <- "PBMC"
+sp$dt[grepl("cl",sp$design)] <- "Cell_line"
+sp_filtered<- sp %>% dplyr::filter(!norm_method=="none")
+```
+
+```{r}
+for (dt in unique(sp_filtered$dt)) {
+  sp_tmp <- sp_filtered[sp_filtered$dt==dt,]
+
+ with(sp_tmp,reorder(data,unwanted_variation_corr)) -> sp_tmp$data
+ with(sp_tmp,reorder(norm_method,unwanted_variation_corr)) -> sp_tmp$norm_method
+
+
+pdf(paste0(savepath,dt,"_unwantedvar.pdf"),width=6,height =4)
+p <- sp_tmp %>%
+  group_by(norm_method,data) %>%
+  dplyr::summarize(Median = round(median(unwanted_variation_corr, na.rm=TRUE),digits=1)) %>% ungroup() %>% 
+  group_by(norm_method) %>% 
+  mutate(scaled = (Median - mean(Median))/sd(Median)) %>% 
+  ggplot()+
+  geom_tile(aes(norm_method, data, fill= scaled))+
+  geom_text(aes(norm_method, data, label= Median),color="black",size=3)+ 
+  scale_fill_distiller(palette = "Blues") +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.ticks = element_blank(),
+    text=element_text(size=12))+
+  ggtitle("Explained unwanted variance") +labs(fill="Scaled Median")
+print(p)
+dev.off()
+}
+
+```
+
+
+
+
+
+```{r}
+library(CellBench)
+sp->sp1
+for (tp in unique(sp1$design)){
+  sp1[sp1$design==tp,]$silhouette = 
+    as.numeric(scale(sp1[sp1$design==tp,]$silhouette,center=mean(sp1[sp1$design==tp & sp1$norm_method=="none",]$silhouette)))
+}
+
+sp1 %>% group_by(dt,data,norm_method) %>% summarise(mean=mean(silhouette),sd=sd(silhouette)) -> sp1_draw
+sp1_draw %>% dplyr::filter(!norm_method=="none")  -> sp1_draw
+with(sp1_draw,reorder(data,mean)) -> sp1_draw$data
+with(sp1_draw,reorder(norm_method,mean)) -> sp1_draw$norm_method
+```
+
+```{r}
+pdf(file.path(savepath,"drop_sil.pdf"),height=6,width=7)
+ggplot(data=sp1_draw,aes(x=data,y=mean,col=data))+geom_point(data=sp1_draw,aes(x=data,y=mean,col=data),size=2)+theme_bw()+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0,
+                position=position_dodge(0.05))+
+  facet_grid(norm_method~dt) + 
+  coord_flip()+
+  scale_colour_manual(values = droplet_col) +
+  labs(x="",y="Normalized Silhouette widths",col="Preprocessing workflows")+ theme(text=element_text(size=12),
+                                                                                    axis.title.y=element_blank(),
+                                                                                          axis.text.y=element_blank(),
+                                                                                          axis.ticks.y=element_blank())
+dev.off()          
+```
+
+
+
+```{r}
+DE_methods_in = function(res_spread,res_column,met_column){
+  res_method = c()
+  res_coeff = c()
+  res_pval = c()
+  for(i in unique(as.character(res_spread[,met_column]))){
+    res_spread$the_method = "NO"
+    res_spread$the_method[res_spread[,met_column]==i] = "YES"
+    fit = lm(res_spread[,res_column] ~ res_spread$the_method)
+    sm = summary(fit)
+    res_method = c(res_method,i)
+    res_coeff = c(res_coeff,sm$coefficients[2,1])
+    res_pval= c(res_pval,sm$coefficients[2,4])
+  }
+  res_df = data.frame(method=res_method,
+                      coefficient=res_coeff,
+                      p_value=res_pval,
+                      stringsAsFactors = FALSE)
+  return(res_df)
+}
+```
+
+
+
+
+```{r}
+for (d in unique(sp_filtered$dt)) {
+  DE_methods_in(as.data.frame(sp_filtered %>% dplyr::filter(dt==d)),res_column="silhouette",met_column="data") ->tmp
+pdf(paste0(savepath,d,"_sil_coefficients.pdf"),height=2.5,width=6)
+p <- ggplot(tmp)+
+  geom_col(aes(reorder(method,coefficient),coefficient,fill=method)) +
+  scale_fill_manual(values=droplet_col) +
+  theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),text = element_text(size=14),
+          axis.ticks.x=element_blank(),panel.background = element_rect(fill = "white", colour = NA), 
+          panel.border = element_rect(fill = NA,colour = "grey20"), panel.grid = element_line(colour = "grey92"), 
+          panel.grid.minor = element_line(size = rel(0.5)), 
+          strip.background = element_rect(fill = "grey85",colour = "grey20")) +
+  labs(x=d,y="Coeffiecient",fill="Preprocessing workflows")
+print(p)
+dev.off()
+}
+
+```
+
